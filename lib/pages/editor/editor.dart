@@ -33,12 +33,17 @@ import 'package:saber/components/toolbar/toolbar.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/editor_exporter.dart';
 import 'package:saber/data/editor/editor_history.dart';
+import 'package:saber/data/editor/ids.dart';
 import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/extensions/change_notifier_extensions.dart';
 import 'package:saber/data/extensions/matrix4_extensions.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/nextcloud/saber_syncer.dart';
 import 'package:saber/data/prefs.dart';
+import 'package:saber/data/sync/realtime/account_syncer.dart';
+import 'package:saber/data/sync/realtime/note_ops.dart';
+import 'package:saber/data/sync/realtime/realtime_account.dart';
+import 'package:saber/data/sync/realtime/realtime_session.dart';
 import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/eraser.dart';
 import 'package:saber/data/tools/highlighter.dart';
@@ -164,6 +169,20 @@ class EditorState extends State<Editor> {
   Timer? _delayedSaveTimer;
   Timer? _watchServerTimer;
 
+  /// Keeps this note in sync with the user's other devices as they write,
+  /// or null if the user isn't signed in to an account.
+  RealtimeSession? _realtime;
+
+  /// The path that [AccountSyncer] was told is open in this editor.
+  String? _pathOpenForSync;
+
+  /// The path that [_realtime] was syncing when this editor was closed.
+  String? _syncedPathWhenClosed;
+
+  /// Whether the note has changes that aren't in [history],
+  /// e.g. because they were made on another device.
+  var _hasUnsavedRealtimeChanges = false;
+
   // used to prevent accidentally drawing when pinch zooming
   var lastSeenPointerCount = 0;
   Timer? _lastSeenPointerCountTimer;
@@ -258,6 +277,69 @@ class EditorState extends State<Editor> {
     } else {
       setState(() {});
     }
+
+    await _startRealtime();
+  }
+
+  /// Syncs this note with the user's account, if they're signed in to one.
+  Future<void> _startRealtime() async {
+    _realtime?.dispose();
+    _realtime = null;
+    history.onRecordChange = (item) => _submitRealtimeOps(item, inverse: false);
+
+    // the note is ours to sync for as long as it's open
+    if (_pathOpenForSync case final previousPath?) {
+      AccountSyncer.instance.noteClosed(previousPath);
+    }
+    AccountSyncer.instance.noteOpened(coreInfo.filePath);
+    _pathOpenForSync = coreInfo.filePath;
+
+    await RealtimeAccount.waitUntilLoaded();
+    if (!mounted) return;
+    if (!RealtimeAccount.isSignedIn || coreInfo.readOnly) return;
+
+    final token = stows.realtimeToken.value;
+    _realtime = RealtimeSession(
+      serverUrl: RealtimeAccount.webSocketUrl,
+      token: token,
+      room: coreInfo.filePath,
+      clientId: stows.realtimeClientId.value,
+      applier: NoteOpApplier(
+        coreInfo: coreInfo,
+        createPage: createPage,
+        removeExcessPages: removeExcessPages,
+        onPageInserted: (page, pageIndex) =>
+            listenToQuillChanges(page.quill, pageIndex),
+      ),
+      onRemoteChange: () {
+        if (!mounted) return;
+        setState(() {});
+        for (final page in coreInfo.pages) {
+          page.redrawStrokes();
+        }
+      },
+      onLocalStateChange: () {
+        if (!mounted) return;
+        _hasUnsavedRealtimeChanges = true;
+        autosaveAfterDelay();
+      },
+      onStopped: (reason) {
+        if (reason == .unauthorized) RealtimeAccount.sessionEnded(token);
+      },
+    )..start();
+    setState(() {});
+  }
+
+  /// Sends [item] (or the undoing of [item] if [inverse])
+  /// to the user's other devices.
+  void _submitRealtimeOps(EditorHistoryItem item, {required bool inverse}) {
+    final ops = NoteOps.fromHistoryItem(item, coreInfo, inverse: inverse);
+    if (_realtime case final realtime?) {
+      realtime.submit(ops);
+    } else {
+      // e.g. the user is signed out for now
+      RealtimeSession.queueForLater(coreInfo, ops);
+    }
   }
 
   void _setState() => setState(() {});
@@ -294,6 +376,7 @@ class EditorState extends State<Editor> {
     while (pageIndex >= coreInfo.pages.length - 1) {
       final page = EditorPage();
       coreInfo.pages.add(page);
+      coreInfo.assignPageIds();
       listenToQuillChanges(page.quill, coreInfo.pages.length - 1);
     }
   }
@@ -381,8 +464,21 @@ class EditorState extends State<Editor> {
           // make sure we already have a (blank/otherwise) page at this index
           createPage(item.pageIndex - 1);
 
+          // a page created since the deletion may have taken this page's id
+          final clash = coreInfo.pages
+              .where((page) => page.id == item!.page!.id)
+              .firstOrNull;
+          if (clash != null) {
+            if (clash.isEmpty) {
+              clash.id = '';
+            } else {
+              item.page!.id = newId();
+            }
+          }
+
           // insert the page at the correct index
           coreInfo.pages.insert(item.pageIndex, item.page!);
+          coreInfo.assignPageIds();
 
           // fix the page indices of all pages after this one
           for (int i = item.pageIndex + 1; i < coreInfo.pages.length; ++i) {
@@ -391,8 +487,9 @@ class EditorState extends State<Editor> {
           }
 
         case .insertPage:
-          // remove the page at the given index
-          coreInfo.pages.removeAt(item.pageIndex);
+          // remove the page (which is usually at the given index)
+          final index = coreInfo.pages.indexOf(item.page!);
+          coreInfo.pages.removeAt(index >= 0 ? index : item.pageIndex);
 
           // fix the page indices of all pages after this one
           for (int i = item.pageIndex; i < coreInfo.pages.length; ++i) {
@@ -441,6 +538,7 @@ class EditorState extends State<Editor> {
       }
     });
 
+    _submitRealtimeOps(item, inverse: true);
     autosaveAfterDelay();
   }
 
@@ -879,7 +977,9 @@ class EditorState extends State<Editor> {
   }
 
   void autosaveAfterDelay() {
-    if (history.isCurrentStateSaved) return cancelAutosaveAndMarkSaved();
+    if (history.isCurrentStateSaved && !_hasUnsavedRealtimeChanges) {
+      return cancelAutosaveAndMarkSaved();
+    }
 
     late final void Function() callback;
 
@@ -927,7 +1027,9 @@ class EditorState extends State<Editor> {
         _delayedSaveTimer?.cancel();
         savingState.value = .saving;
     }
-    if (history.isCurrentStateSaved) return cancelAutosaveAndMarkSaved();
+    if (history.isCurrentStateSaved && !_hasUnsavedRealtimeChanges) {
+      return cancelAutosaveAndMarkSaved();
+    }
 
     await _renameFileNow();
 
@@ -935,6 +1037,8 @@ class EditorState extends State<Editor> {
     final Uint8List bson;
     final OrderedAssetCache assets;
     coreInfo.assetCache.allowRemovingAssets = false;
+    final hadUnsavedRealtimeChanges = _hasUnsavedRealtimeChanges;
+    _hasUnsavedRealtimeChanges = false;
     try {
       (bson, assets) = coreInfo.saveToBinary(
         currentPageIndex: currentPageIndex,
@@ -959,8 +1063,11 @@ class EditorState extends State<Editor> {
       ]);
       savingState.value = .saved;
       history.markLastChangeAsSaved();
+      // the note may have been changed by another device while we were saving
+      if (_hasUnsavedRealtimeChanges && mounted) autosaveAfterDelay();
     } catch (e, st) {
       log.severe('Failed to save file: $e', e, st);
+      _hasUnsavedRealtimeChanges |= hadUnsavedRealtimeChanges;
       savingState.value = .waitingToSave;
       if (kDebugMode) rethrow;
       return;
@@ -1011,6 +1118,9 @@ class EditorState extends State<Editor> {
         coreInfo.filePath.lastIndexOf(Editor.extension),
       );
       needsNaming = false;
+
+      // notes are matched between devices by their path
+      if (mounted) unawaited(_startRealtime());
     }
 
     final actualName = coreInfo.fileName;
@@ -1208,6 +1318,7 @@ class EditorState extends State<Editor> {
       );
 
       final page = EditorPage(
+        id: newId(),
         size: pageSize,
         backgroundImage: PdfEditorImage(
           id: coreInfo.nextImageId++,
@@ -1665,6 +1776,25 @@ class EditorState extends State<Editor> {
                   triggerSave: saveToFile,
                 ),
                 actions: [
+                  if (_realtime case final realtime?)
+                    ValueListenableBuilder(
+                      valueListenable: realtime.state,
+                      builder: (context, state, _) => Tooltip(
+                        message: switch (state) {
+                          .offline => t.editor.realtime.offline,
+                          .catchingUp => t.editor.realtime.catchingUp,
+                          .live => t.editor.realtime.live,
+                        },
+                        child: Padding(
+                          padding: const .symmetric(horizontal: 8),
+                          child: Icon(switch (state) {
+                            .offline => Icons.cloud_off,
+                            .catchingUp => Icons.cloud_sync,
+                            .live => Icons.cloud_done,
+                          }, size: 20),
+                        ),
+                      ),
+                    ),
                   IconButton(
                     icon: const AdaptiveIcon(
                       icon: Icons.insert_page_break,
@@ -1896,7 +2026,7 @@ class EditorState extends State<Editor> {
             focusNode: FocusNode(debugLabel: 'Quill Focus Node'),
           ),
           backgroundImage: page.backgroundImage?.copy()?..pageIndex += 1,
-        );
+        )..id = newId();
         coreInfo.pages.insert(pageIndex + 1, newPage);
         listenToQuillChanges(newPage.quill, pageIndex + 1);
         history.recordChange(
@@ -1932,7 +2062,7 @@ class EditorState extends State<Editor> {
 
   void insertPageAfter(int pageIndex) => setState(() {
     if (coreInfo.readOnly) return;
-    final page = EditorPage();
+    final page = EditorPage(id: newId());
     coreInfo.pages.insert(pageIndex + 1, page);
     listenToQuillChanges(page.quill, pageIndex + 1);
     history.recordChange(
@@ -2067,6 +2197,8 @@ class EditorState extends State<Editor> {
     _delayedSaveTimer?.cancel();
     _watchServerTimer?.cancel();
     _lastSeenPointerCountTimer?.cancel();
+    _syncedPathWhenClosed = _realtime?.room;
+    _realtime?.dispose();
 
     _removeKeybindings();
 
@@ -2089,6 +2221,17 @@ class EditorState extends State<Editor> {
       }
       await saveToFile();
     } finally {
+      // the note is in the hands of the library syncer from now on
+      if (_pathOpenForSync case final path?) {
+        final isUpToDate =
+            _syncedPathWhenClosed == coreInfo.filePath &&
+            coreInfo.pendingOps.isEmpty;
+        AccountSyncer.instance.noteClosed(
+          path,
+          closedPath: coreInfo.filePath,
+          seq: isUpToDate ? coreInfo.realtimeSeq : null,
+        );
+      }
       coreInfo.dispose();
     }
   }

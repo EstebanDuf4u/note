@@ -1,0 +1,16 @@
+name: noteplus_server
+description: Relay server that keeps Note+ notes in sync in realtime.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  args: ^2.5.0
+  bson: ^5.0.0
+  crypto: ^3.0.2
+  fixnum: ^1.1.0
+
+dev_dependencies:
+  test: ^1.25.0

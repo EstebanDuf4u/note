@@ -20,7 +20,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	/// Constructing via the enum [AppLocale.build] is preferred.
 	Translations({Map<String, Node>? overrides, PluralResolver? cardinalResolver, PluralResolver? ordinalResolver, TranslationMetadata<AppLocale, Translations>? meta})
 		: assert(overrides == null, 'Set "translation_overrides: true" in order to enable this feature.'),
-		  $meta = meta ?? TranslationMetadata(
+		  _meta = meta ?? TranslationMetadata(
 		    locale: AppLocale.en,
 		    overrides: overrides ?? {},
 		    cardinalResolver: cardinalResolver,
@@ -28,7 +28,8 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 		  );
 
 	/// Metadata for the translations of <en>.
-	@override final TranslationMetadata<AppLocale, Translations> $meta;
+	final TranslationMetadata<AppLocale, Translations> _meta;
+	@override TranslationMetadata<AppLocale, Translations> get $meta => _meta;
 
 	late final Translations _root = this; // ignore: unused_field
 
@@ -41,6 +42,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$settings$en settings = Translations$settings$en.internal(_root);
 	late final Translations$logs$en logs = Translations$logs$en.internal(_root);
 	late final Translations$login$en login = Translations$login$en.internal(_root);
+	late final Translations$account$en account = Translations$account$en.internal(_root);
 	late final Translations$profile$en profile = Translations$profile$en.internal(_root);
 	late final Translations$appInfo$en appInfo = Translations$appInfo$en.internal(_root);
 	late final Translations$update$en update = Translations$update$en.internal(_root);
@@ -77,8 +79,8 @@ class Translations$home$en {
 	late final Translations$home$tooltips$en tooltips = Translations$home$tooltips$en.internal(_root);
 	late final Translations$home$create$en create = Translations$home$create$en.internal(_root);
 
-	/// en: 'Welcome to Saber'
-	String get welcome => 'Welcome to Saber';
+	/// en: 'Welcome to Note+'
+	String get welcome => 'Welcome to Note+';
 
 	/// en: 'The file you selected is not supported. Please select an sbn, sbn2, sba, or pdf file.'
 	String get invalidFormat => 'The file you selected is not supported. Please select an sbn, sbn2, sba, or pdf file.';
@@ -147,8 +149,8 @@ class Translations$settings$en {
 	/// en: 'Resync everything'
 	String get resyncEverything => 'Resync everything';
 
-	/// en: 'Open Saber folder'
-	String get openDataDir => 'Open Saber folder';
+	/// en: 'Open Note+ folder'
+	String get openDataDir => 'Open Note+ folder';
 
 	late final Translations$settings$customDataDir$en customDataDir = Translations$settings$customDataDir$en.internal(_root);
 
@@ -213,6 +215,63 @@ class Translations$login$en {
 	late final Translations$login$status$en status = Translations$login$status$en.internal(_root);
 	late final Translations$login$ncLoginStep$en ncLoginStep = Translations$login$ncLoginStep$en.internal(_root);
 	late final Translations$login$encLoginStep$en encLoginStep = Translations$login$encLoginStep$en.internal(_root);
+}
+
+// Path: account
+class Translations$account$en {
+	Translations$account$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Note+ account'
+	String get title => 'Note+ account';
+
+	/// en: 'Not signed in'
+	String get signedOut => 'Not signed in';
+
+	/// en: 'Sign in to sync your notes between your devices'
+	String get tapToSignIn => 'Sign in to sync your notes between your devices';
+
+	/// en: 'Signed in as $u'
+	String signedInAs({required Object u}) => 'Signed in as ${u}';
+
+	/// en: 'Sign in on each of your devices, and your notes will be kept in sync between them as you write.'
+	String get intro => 'Sign in on each of your devices, and your notes will be kept in sync between them as you write.';
+
+	/// en: 'Handwriting, pages and paper styles are synced. Text and images aren't synced yet.'
+	String get limitations => 'Handwriting, pages and paper styles are synced. Text and images aren\'t synced yet.';
+
+	/// en: 'Server address'
+	String get server => 'Server address';
+
+	/// en: 'For example 192.168.1.10:8787'
+	String get serverHint => 'For example 192.168.1.10:8787';
+
+	/// en: 'Username'
+	String get username => 'Username';
+
+	/// en: 'Password'
+	String get password => 'Password';
+
+	/// en: 'Sign in'
+	String get signIn => 'Sign in';
+
+	/// en: 'Create an account'
+	String get createAccount => 'Create an account';
+
+	/// en: 'Sign out'
+	String get signOut => 'Sign out';
+
+	/// en: 'Your notes will stay on this device.'
+	String get signOutNote => 'Your notes will stay on this device.';
+
+	/// en: 'Sync now'
+	String get syncNow => 'Sync now';
+
+	late final Translations$account$status$en status = Translations$account$status$en.internal(_root);
+	late final Translations$account$errors$en errors = Translations$account$errors$en.internal(_root);
 }
 
 // Path: profile
@@ -303,6 +362,7 @@ class Translations$editor$en {
 	final Translations _root; // ignore: unused_field
 
 	// Translations
+	late final Translations$editor$realtime$en realtime = Translations$editor$realtime$en.internal(_root);
 	late final Translations$editor$toolbar$en toolbar = Translations$editor$toolbar$en.internal(_root);
 	late final Translations$editor$pens$en pens = Translations$editor$pens$en.internal(_root);
 	late final Translations$editor$penOptions$en penOptions = Translations$editor$penOptions$en.internal(_root);
@@ -666,8 +726,8 @@ class Translations$settings$prefLabels$en {
 	/// en: 'Atkinson Hyperlegible font'
 	String get hyperlegibleFont => 'Atkinson Hyperlegible font';
 
-	/// en: 'Check for Saber updates'
-	String get shouldCheckForUpdates => 'Check for Saber updates';
+	/// en: 'Check for Note+ updates'
+	String get shouldCheckForUpdates => 'Check for Note+ updates';
 
 	/// en: 'Faster updates'
 	String get shouldAlwaysAlertForUpdates => 'Faster updates';
@@ -723,8 +783,8 @@ class Translations$settings$prefLabels$en {
 	/// en: 'Auto straighten lines'
 	String get autoStraightenLines => 'Auto straighten lines';
 
-	/// en: 'Custom Saber folder'
-	String get customDataDir => 'Custom Saber folder';
+	/// en: 'Custom Note+ folder'
+	String get customDataDir => 'Custom Note+ folder';
 
 	/// en: 'Error reporting'
 	String get sentry => 'Error reporting';
@@ -741,8 +801,8 @@ class Translations$settings$prefDescriptions$en {
 	/// en: 'Increases legibility for users with low vision'
 	String get hyperlegibleFont => 'Increases legibility for users with low vision';
 
-	/// en: '(Not recommended) Allow Saber to connect to servers with self-signed/untrusted certificates'
-	String get allowInsecureConnections => '(Not recommended) Allow Saber to connect to servers with self-signed/untrusted certificates';
+	/// en: '(Not recommended) Allow Note+ to connect to servers with self-signed/untrusted certificates'
+	String get allowInsecureConnections => '(Not recommended) Allow Note+ to connect to servers with self-signed/untrusted certificates';
 
 	/// en: 'For e-ink displays'
 	String get preferGreyscale => 'For e-ink displays';
@@ -971,6 +1031,63 @@ class Translations$login$encLoginStep$en {
 	];
 }
 
+// Path: account.status
+class Translations$account$status$en {
+	Translations$account$status$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Syncing your notes…'
+	String get syncing => 'Syncing your notes…';
+
+	/// en: 'Your notes are up to date'
+	String get upToDate => 'Your notes are up to date';
+
+	/// en: 'Can't reach the server. Trying again shortly…'
+	String get offline => 'Can\'t reach the server. Trying again shortly…';
+}
+
+// Path: account.errors
+class Translations$account$errors$en {
+	Translations$account$errors$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Enter the server address, your username and your password.'
+	String get missingFields => 'Enter the server address, your username and your password.';
+
+	/// en: 'This isn't the address of a Note+ server.'
+	String get invalidServer => 'This isn\'t the address of a Note+ server.';
+
+	/// en: 'Can't reach the server. Check the address and your connection.'
+	String get unreachable => 'Can\'t reach the server. Check the address and your connection.';
+
+	/// en: 'Wrong username or password.'
+	String get wrongCredentials => 'Wrong username or password.';
+
+	/// en: 'This username is already taken.'
+	String get usernameTaken => 'This username is already taken.';
+
+	/// en: 'Usernames have 3 to 32 letters, digits, dots, dashes or underscores.'
+	String get invalidUsername => 'Usernames have 3 to 32 letters, digits, dots, dashes or underscores.';
+
+	/// en: 'Use a password of at least 8 characters.'
+	String get weakPassword => 'Use a password of at least 8 characters.';
+
+	/// en: 'This server doesn't accept new accounts.'
+	String get registrationClosed => 'This server doesn\'t accept new accounts.';
+
+	/// en: 'Too many wrong passwords. Try again in a few minutes.'
+	String get tooManyAttempts => 'Too many wrong passwords. Try again in a few minutes.';
+
+	/// en: 'Something went wrong on the server.'
+	String get unknown => 'Something went wrong on the server.';
+}
+
 // Path: profile.quickLinks
 class Translations$profile$quickLinks$en {
 	Translations$profile$quickLinks$en.internal(this._root);
@@ -1044,6 +1161,24 @@ class Translations$profile$faq$3$en {
 
 	/// en: 'Tap on the "Delete account" button above, and login if needed. If you are using the official Saber server, your account will be deleted after a 1 week grace period. You can contact me at adilhanney@disroot.org during this period to cancel the deletion. If you are using a third party server, there might not be an option to delete your account: you'll need to consult the server's privacy policy for more information.'
 	String get a => 'Tap on the "${_root.profile.quickLinks.deleteAccount}" button above, and login if needed.\nIf you are using the official Saber server, your account will be deleted after a 1 week grace period. You can contact me at adilhanney@disroot.org during this period to cancel the deletion.\nIf you are using a third party server, there might not be an option to delete your account: you\'ll need to consult the server\'s privacy policy for more information.';
+}
+
+// Path: editor.realtime
+class Translations$editor$realtime$en {
+	Translations$editor$realtime$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Realtime sync is offline. Your changes will be sent when it reconnects.'
+	String get offline => 'Realtime sync is offline. Your changes will be sent when it reconnects.';
+
+	/// en: 'Catching up with your other devices…'
+	String get catchingUp => 'Catching up with your other devices…';
+
+	/// en: 'Synced in realtime'
+	String get live => 'Synced in realtime';
 }
 
 // Path: editor.toolbar
@@ -1336,8 +1471,8 @@ class Translations$editor$versionTooNew$en {
 
 	// Translations
 
-	/// en: 'This note was edited using a newer version of Saber'
-	String get title => 'This note was edited using a newer version of Saber';
+	/// en: 'This note was edited using a newer version of Note+'
+	String get title => 'This note was edited using a newer version of Note+';
 
 	/// en: 'Editing this note may result in some information being lost. Do you want to ignore this and edit it anyway?'
 	String get subtitle => 'Editing this note may result in some information being lost. Do you want to ignore this and edit it anyway?';

@@ -16,7 +16,7 @@ class TranslationsFr extends Translations with BaseTranslations<AppLocale, Trans
 	/// Constructing via the enum [AppLocale.build] is preferred.
 	TranslationsFr({Map<String, Node>? overrides, PluralResolver? cardinalResolver, PluralResolver? ordinalResolver, TranslationMetadata<AppLocale, Translations>? meta})
 		: assert(overrides == null, 'Set "translation_overrides: true" in order to enable this feature.'),
-		  $meta = meta ?? TranslationMetadata(
+		  _meta = meta ?? TranslationMetadata(
 		    locale: AppLocale.fr,
 		    overrides: overrides ?? {},
 		    cardinalResolver: cardinalResolver,
@@ -25,7 +25,8 @@ class TranslationsFr extends Translations with BaseTranslations<AppLocale, Trans
 		  super(cardinalResolver: cardinalResolver, ordinalResolver: ordinalResolver);
 
 	/// Metadata for the translations of <fr>.
-	@override final TranslationMetadata<AppLocale, Translations> $meta;
+	final TranslationMetadata<AppLocale, Translations> _meta;
+	@override TranslationMetadata<AppLocale, Translations> get $meta => _meta;
 
 	late final TranslationsFr _root = this; // ignore: unused_field
 
@@ -39,6 +40,7 @@ class TranslationsFr extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$settings$fr settings = _Translations$settings$fr._(_root);
 	@override late final _Translations$logs$fr logs = _Translations$logs$fr._(_root);
 	@override late final _Translations$login$fr login = _Translations$login$fr._(_root);
+	@override late final _Translations$account$fr account = _Translations$account$fr._(_root);
 	@override late final _Translations$profile$fr profile = _Translations$profile$fr._(_root);
 	@override late final _Translations$appInfo$fr appInfo = _Translations$appInfo$fr._(_root);
 	@override late final _Translations$update$fr update = _Translations$update$fr._(_root);
@@ -68,7 +70,7 @@ class _Translations$home$fr extends Translations$home$en {
 	@override late final _Translations$home$titles$fr titles = _Translations$home$titles$fr._(_root);
 	@override late final _Translations$home$tooltips$fr tooltips = _Translations$home$tooltips$fr._(_root);
 	@override late final _Translations$home$create$fr create = _Translations$home$create$fr._(_root);
-	@override String get welcome => 'Bienvenue dans Saber';
+	@override String get welcome => 'Bienvenue dans Note+';
 	@override String get invalidFormat => 'Type de fichier non supporté. Veuillez choisr un fichier .sbn, .sbn2, .sba ou .pdf.';
 	@override String get noFiles => 'Aucun fichier trouvé';
 	@override String get noPreviewAvailable => 'Aperçu non disponible';
@@ -117,7 +119,7 @@ class _Translations$settings$fr extends Translations$settings$en {
 	];
 	@override late final _Translations$settings$reset$fr reset = _Translations$settings$reset$fr._(_root);
 	@override String get resyncEverything => 'Tout re-syncroniser';
-	@override String get openDataDir => 'Ouvrir le dossier Saber';
+	@override String get openDataDir => 'Ouvrir le dossier Note+';
 	@override late final _Translations$settings$customDataDir$fr customDataDir = _Translations$settings$customDataDir$fr._(_root);
 	@override String get autosaveDisabled => 'Jamais';
 	@override String get shapeRecognitionDisabled => 'Jamais';
@@ -159,6 +161,32 @@ class _Translations$login$fr extends Translations$login$en {
 	@override late final _Translations$login$status$fr status = _Translations$login$status$fr._(_root);
 	@override late final _Translations$login$ncLoginStep$fr ncLoginStep = _Translations$login$ncLoginStep$fr._(_root);
 	@override late final _Translations$login$encLoginStep$fr encLoginStep = _Translations$login$encLoginStep$fr._(_root);
+}
+
+// Path: account
+class _Translations$account$fr extends Translations$account$en {
+	_Translations$account$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'Compte Note+';
+	@override String get signedOut => 'Non connecté';
+	@override String get tapToSignIn => 'Connectez-vous pour synchroniser vos notes entre vos appareils';
+	@override String signedInAs({required Object u}) => 'Connecté en tant que ${u}';
+	@override String get intro => 'Connectez-vous sur chacun de vos appareils, et vos notes y seront synchronisées pendant que vous écrivez.';
+	@override String get limitations => 'L\'écriture, les pages et les styles de papier sont synchronisés. Le texte et les images ne le sont pas encore.';
+	@override String get server => 'Adresse du serveur';
+	@override String get serverHint => 'Par exemple 192.168.1.10:8787';
+	@override String get username => 'Nom d\'utilisateur';
+	@override String get password => 'Mot de passe';
+	@override String get signIn => 'Se connecter';
+	@override String get createAccount => 'Créer un compte';
+	@override String get signOut => 'Se déconnecter';
+	@override String get signOutNote => 'Vos notes resteront sur cet appareil.';
+	@override String get syncNow => 'Synchroniser maintenant';
+	@override late final _Translations$account$status$fr status = _Translations$account$status$fr._(_root);
+	@override late final _Translations$account$errors$fr errors = _Translations$account$errors$fr._(_root);
 }
 
 // Path: profile
@@ -217,6 +245,7 @@ class _Translations$editor$fr extends Translations$editor$en {
 	final TranslationsFr _root; // ignore: unused_field
 
 	// Translations
+	@override late final _Translations$editor$realtime$fr realtime = _Translations$editor$realtime$fr._(_root);
 	@override late final _Translations$editor$toolbar$fr toolbar = _Translations$editor$toolbar$fr._(_root);
 	@override late final _Translations$editor$pens$fr pens = _Translations$editor$pens$fr._(_root);
 	@override late final _Translations$editor$penOptions$fr penOptions = _Translations$editor$penOptions$fr._(_root);
@@ -457,7 +486,7 @@ class _Translations$settings$prefLabels$fr extends Translations$settings$prefLab
 	@override String get autosave => 'Sauvegarde automatique';
 	@override String get shapeRecognitionDelay => 'Délai de reconnaissance de forme';
 	@override String get autoStraightenLines => 'Redresser les lignes automatiquement';
-	@override String get customDataDir => 'Dossier Saber personnalisé';
+	@override String get customDataDir => 'Dossier Note+ personnalisé';
 	@override String get sentry => 'Rapport d’erreurs';
 }
 
@@ -469,7 +498,7 @@ class _Translations$settings$prefDescriptions$fr extends Translations$settings$p
 
 	// Translations
 	@override String get hyperlegibleFont => 'La fonte Atkinson Hyperlegible améliore la lisibilité pour les personnes malvoyantes';
-	@override String get allowInsecureConnections => '(Déconseillé) Autoriser Saber à se connecter à des serveurs dont les certificats sont auto-signés/non-sécurisé';
+	@override String get allowInsecureConnections => '(Déconseillé) Autoriser Note+ à se connecter à des serveurs dont les certificats sont auto-signés/non-sécurisé';
 	@override String get preferGreyscale => 'Pour les couleurs de stylos proposées';
 	@override String get autoClearWhiteboardOnExit => 'Il restera synchronisé avec vos autres appareils';
 	@override String get disableEraserAfterUse => 'Revenir automatiquement au stylo après usage de la gomme';
@@ -608,6 +637,37 @@ class _Translations$login$encLoginStep$fr extends Translations$login$encLoginSte
 	];
 }
 
+// Path: account.status
+class _Translations$account$status$fr extends Translations$account$status$en {
+	_Translations$account$status$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get syncing => 'Synchronisation de vos notes…';
+	@override String get upToDate => 'Vos notes sont à jour';
+	@override String get offline => 'Serveur injoignable. Nouvel essai dans un instant…';
+}
+
+// Path: account.errors
+class _Translations$account$errors$fr extends Translations$account$errors$en {
+	_Translations$account$errors$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get missingFields => 'Saisissez l\'adresse du serveur, votre nom d\'utilisateur et votre mot de passe.';
+	@override String get invalidServer => 'Cette adresse n\'est pas celle d\'un serveur Note+.';
+	@override String get unreachable => 'Serveur injoignable. Vérifiez l\'adresse et votre connexion.';
+	@override String get wrongCredentials => 'Nom d\'utilisateur ou mot de passe incorrect.';
+	@override String get usernameTaken => 'Ce nom d\'utilisateur est déjà pris.';
+	@override String get invalidUsername => 'Un nom d\'utilisateur fait 3 à 32 lettres, chiffres, points, tirets ou tirets bas.';
+	@override String get weakPassword => 'Choisissez un mot de passe d\'au moins 8 caractères.';
+	@override String get registrationClosed => 'Ce serveur n\'accepte pas de nouveaux comptes.';
+	@override String get tooManyAttempts => 'Trop de mots de passe incorrects. Réessayez dans quelques minutes.';
+	@override String get unknown => 'Une erreur s\'est produite sur le serveur.';
+}
+
 // Path: profile.quickLinks
 class _Translations$profile$quickLinks$fr extends Translations$profile$quickLinks$en {
 	_Translations$profile$quickLinks$fr._(TranslationsFr root) : this._root = root, super.internal(root);
@@ -661,6 +721,18 @@ class _Translations$profile$faq$3$fr extends Translations$profile$faq$3$en {
 	// Translations
 	@override String get q => 'Comment puis-je supprimer mon compte ?';
 	@override String get a => 'Cliquez sur le button "${_root.profile.quickLinks.deleteAccount}" ci-dessus, et connectez-vous si nécessaire.\nSi vous utilisez le serveur Saber officiel, votre compte sera supprimé au bout d\'une semaine . Durant cette période, vous pourrez me contacter à adilhanney@disroot.org pour annuler la suppression.\nSi vous utilisez un autre serveur, il n\'est pas certain que vous puissiez supprimer votre compte dessus : il vous faudra consulter les règles de confidentialité du serveur pour plus d\'informations.';
+}
+
+// Path: editor.realtime
+class _Translations$editor$realtime$fr extends Translations$editor$realtime$en {
+	_Translations$editor$realtime$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get offline => 'Synchro temps réel hors ligne. Vos modifications seront envoyées à la reconnexion.';
+	@override String get catchingUp => 'Récupération des modifications de vos autres appareils…';
+	@override String get live => 'Synchronisé en temps réel';
 }
 
 // Path: editor.toolbar
@@ -813,7 +885,7 @@ class _Translations$editor$versionTooNew$fr extends Translations$editor$versionT
 	final TranslationsFr _root; // ignore: unused_field
 
 	// Translations
-	@override String get title => 'Cette note a été modifiée avec une version plus récente de Saber';
+	@override String get title => 'Cette note a été modifiée avec une version plus récente de Note+';
 	@override String get subtitle => 'Éditer cette note pourrait entraîner la perte de certaines informations. Voulez-vous la modifier quand même ?';
 	@override String get allowEditing => 'Autoriser les modifications';
 }

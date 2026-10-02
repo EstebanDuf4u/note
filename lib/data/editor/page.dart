@@ -24,6 +24,11 @@ class EditorPage extends ChangeNotifier implements HasSize {
   @override
   final Size size;
 
+  /// Identifies this page across devices when syncing in realtime.
+  ///
+  /// Empty until [EditorCoreInfo.assignPageIds] gives it an id.
+  String id;
+
   late final CanvasKey innerCanvasKey = CanvasKey();
   RenderBox? _renderBox;
   RenderBox? get renderBox {
@@ -108,6 +113,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     List<EditorImage>? images,
     QuillStruct? quill,
     this.backgroundImage,
+    this.id = '',
   }) : assert(
          (size == null) || (width == null && height == null),
          "size and width/height shouldn't both be specified",
@@ -133,6 +139,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
   }) {
     final size = Size(json['w'] ?? defaultWidth, json['h'] ?? defaultHeight);
     return EditorPage(
+      id: json['id'] as String? ?? '',
       size: size,
       strokes: parseStrokesJson(
         json['s'] as List?,
@@ -172,6 +179,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
   Map<String, dynamic> toJson(OrderedAssetCache assets) => {
     'w': size.width,
     'h': size.height,
+    if (id.isNotEmpty) 'id': id,
     if (strokes.isNotEmpty)
       's': strokes.map((stroke) => stroke.toJson()).toList(),
     if (images.isNotEmpty)

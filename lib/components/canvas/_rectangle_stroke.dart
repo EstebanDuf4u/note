@@ -62,6 +62,7 @@ class RectangleStroke extends Stroke {
   Map<String, dynamic> toJson() {
     return {
       'shape': 'rect',
+      'id': id,
       'i': pageIndex,
       'rl': rect.left,
       'rt': rect.top,

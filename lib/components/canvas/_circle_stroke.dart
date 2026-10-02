@@ -62,6 +62,7 @@ class CircleStroke extends Stroke {
   Map<String, dynamic> toJson() {
     return {
       'shape': 'circle',
+      'id': id,
       'i': pageIndex,
       'cx': center.dx,
       'cy': center.dy,

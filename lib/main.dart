@@ -23,11 +23,13 @@ import 'package:saber/data/nextcloud/saber_syncer.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/data/routes.dart';
 import 'package:saber/data/sentry/sentry_init.dart';
+import 'package:saber/data/sync/realtime/account_syncer.dart';
 import 'package:saber/data/tools/stroke_properties.dart';
 import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/editor.dart';
 import 'package:saber/pages/home/home.dart';
 import 'package:saber/pages/logs.dart';
+import 'package:saber/pages/user/account.dart';
 import 'package:saber/pages/user/login.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:worker_manager/worker_manager.dart';
@@ -121,6 +123,7 @@ Future<void> appRunner(List<String> args) async {
   HttpOverrides.global = NcHttpOverrides();
   runApp(SentryWidget(child: TranslationProvider(child: const App())));
   startSyncAfterLoaded();
+  unawaited(AccountSyncer.instance.start());
   setupBackgroundSync();
 }
 
@@ -258,6 +261,10 @@ class const App({super.key}) extends StatefulWidget {
         path: RoutePaths.login,
         builder: (context, state) => const NcLoginPage(),
       ),
+      GoRoute(
+        path: RoutePaths.account,
+        builder: (context, state) => const RealtimeAccountPage(),
+      ),
       GoRoute(path: '/profile', redirect: (context, state) => RoutePaths.login),
       GoRoute(
         path: RoutePaths.logs,
@@ -335,7 +342,7 @@ class _AppState extends State<App> {
 
   @override
   Widget build(BuildContext context) {
-    return DynamicMaterialApp(title: 'Saber', router: App._router);
+    return DynamicMaterialApp(title: 'Note+', router: App._router);
   }
 
   @override

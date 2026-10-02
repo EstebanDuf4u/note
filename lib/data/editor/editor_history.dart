@@ -30,6 +30,9 @@ class EditorHistory {
   /// reject strokes (i.e. accidental strokes when zooming).
   var _isRedoPossible = false;
 
+  /// Called whenever a change is recorded with [recordChange].
+  void Function(EditorHistoryItem item)? onRecordChange;
+
   /// Removes an element from the [_past] stack,
   /// adds it to the [_future] stack, and returns it.
   ///
@@ -84,6 +87,7 @@ class EditorHistory {
     _past.add(item);
     if (_past.length > maxHistoryLength) _past.removeAt(0);
     _isRedoPossible = false;
+    onRecordChange?.call(item);
   }
 
   /// Marks the last change as saved to disk.

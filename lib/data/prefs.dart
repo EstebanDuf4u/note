@@ -76,6 +76,48 @@ class Stows {
       ncPassword.value.isNotEmpty &&
       encPassword.value.isNotEmpty;
 
+  /// The address of the Note+ server that the user's account is on,
+  /// e.g. `http://192.168.1.10:8787`.
+  final realtimeUrl = PlainStow('realtimeUrl', '', volatile: !_isOnMainIsolate);
+
+  /// The name of the Note+ account that this device is signed in to.
+  final realtimeUsername = PlainStow(
+    'realtimeUsername',
+    '',
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// The session that the server gave this device when it signed in,
+  /// or an empty string if the user isn't signed in.
+  final realtimeToken = SecureStow(
+    'realtimeToken',
+    '',
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// Identifies this device among the others of the account.
+  final realtimeClientId = PlainStow(
+    'realtimeClientId',
+    '',
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// The notes that were deleted on this device
+  /// but that the server hasn't been told about yet.
+  final realtimePendingDeletes = PlainStow(
+    'realtimePendingDeletes',
+    <String>[],
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// A json map from the path of each note to the sequence number of the
+  /// last realtime operation that its file is known to include.
+  final realtimeNoteSeqs = PlainStow(
+    'realtimeNoteSeqs',
+    '{}',
+    volatile: !_isOnMainIsolate,
+  );
+
   final key = SecureStow('key', '', volatile: !_isOnMainIsolate);
   final iv = SecureStow('iv', '', volatile: !_isOnMainIsolate);
 
