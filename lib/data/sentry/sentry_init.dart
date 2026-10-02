@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:saber/data/is_this_a_test.dart';
@@ -10,15 +9,11 @@ import 'package:sentry_logging/sentry_logging.dart';
 
 export 'package:sentry_flutter/sentry_flutter.dart' show SentryWidget;
 
-/// Whether the Sentry SDK is available for use.
-/// Also see [isSentryEnabled].
+/// Whether Sentry can be enabled in this build.
 ///
-/// This flag will be:
-/// - false if the foss patches were applied before this build
-/// - false on Linux (except in tests)
-/// - true otherwise
-@pragma('vm:platform-const-if', !kDebugMode)
-bool get isSentryAvailable => !Platform.isLinux || isThisATest;
+/// Error reports would go to the Saber project, which this app is a fork of,
+/// so this is only true in tests until Note+ has its own Sentry project.
+bool get isSentryAvailable => isThisATest;
 
 /// Whether Sentry was initialized when the app started.
 ///

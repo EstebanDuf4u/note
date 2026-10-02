@@ -183,6 +183,10 @@ dev_dependencies:
 
   sentry_dart_plugin: ^3.1.1
 
+  # The realtime server, so that tests can sync against a real one
+  noteplus_server:
+    path: server
+
 dependency_overrides:
   # https://github.com/darioielardi/flutter_speed_dial/pull/344
   # Note: flutter_speed_dial hasn't been updated in 3 years, maybe replace it.

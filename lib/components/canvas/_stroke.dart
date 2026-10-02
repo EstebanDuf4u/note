@@ -8,6 +8,7 @@ import 'package:one_dollar_unistroke_recognizer/one_dollar_unistroke_recognizer.
 import 'package:perfect_freehand/perfect_freehand.dart';
 import 'package:saber/components/canvas/_circle_stroke.dart';
 import 'package:saber/components/canvas/_rectangle_stroke.dart';
+import 'package:saber/data/editor/ids.dart';
 import 'package:saber/data/extensions/list_extensions.dart';
 import 'package:saber/data/extensions/point_extensions.dart';
 import 'package:sbn/has_size.dart';
@@ -22,6 +23,9 @@ class Stroke {
 
   bool get isEmpty => points.isEmpty;
   int get length => points.length;
+
+  /// Identifies this stroke across devices when syncing in realtime.
+  String id = newId();
 
   int pageIndex;
   HasSize page;
@@ -78,26 +82,42 @@ class Stroke {
     required HasSize page,
   }) {
     assert(json['i'] == pageIndex || json['i'] == null);
+    final Stroke stroke;
     switch (json['shape'] as String?) {
-      case null:
-        break;
       case 'circle':
-        return CircleStroke.fromJson(
+        stroke = CircleStroke.fromJson(
           json,
           fileVersion: fileVersion,
           pageIndex: pageIndex,
           page: page,
         );
       case 'rect':
-        return RectangleStroke.fromJson(
+        stroke = RectangleStroke.fromJson(
           json,
           fileVersion: fileVersion,
           pageIndex: pageIndex,
           page: page,
         );
-      default:
-        log.severe('Unknown shape: ${json['shape']}');
+      case final shape:
+        if (shape != null) log.severe('Unknown shape: $shape');
+        stroke = Stroke._freehandFromJson(
+          json,
+          fileVersion: fileVersion,
+          pageIndex: pageIndex,
+          page: page,
+        );
     }
+    final id = json['id'];
+    if (id is String && id.isNotEmpty) stroke.id = id;
+    return stroke;
+  }
+
+  factory _freehandFromJson(
+    Map<String, dynamic> json, {
+    required int fileVersion,
+    required int pageIndex,
+    required HasSize page,
+  }) {
 
     final ToolId toolId = .parsePenType(json['ty'], fallback: .fountainPen);
 
@@ -154,6 +174,7 @@ class Stroke {
     // these json keys should not be the same as the ones in [StrokeOptions.toJson]
     return {
       'shape': null,
+      'id': id,
       'p': points
           .where((point) => point.isFinite)
           .map((PointVector point) => point.toBsonBinary())

@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:saber/components/navbar/responsive_navbar.dart';
 import 'package:saber/components/settings/app_info.dart';
 import 'package:saber/components/settings/nextcloud_profile.dart';
+import 'package:saber/components/settings/realtime_account_tile.dart';
 import 'package:saber/components/settings/settings_button.dart';
 import 'package:saber/components/settings/settings_color.dart';
 import 'package:saber/components/settings/settings_directory_selector.dart';
@@ -189,6 +190,7 @@ class _SettingsPageState extends State<SettingsPage> {
           SliverSafeArea(
             sliver: SliverList.list(
               children: [
+                const RealtimeAccountTile(),
                 const NextcloudProfile(),
                 const Padding(padding: .all(8), child: AppInfo()),
                 SettingsSubtitle(subtitle: t.settings.prefCategories.general),

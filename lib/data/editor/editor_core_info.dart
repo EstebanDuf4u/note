@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import 'package:saber/components/canvas/_asset_cache.dart';
 import 'package:saber/components/canvas/_stroke.dart';
 import 'package:saber/components/canvas/image/editor_image.dart';
+import 'package:saber/data/editor/ids.dart';
 import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/flavor_config.dart';
@@ -75,6 +76,14 @@ class EditorCoreInfo {
   /// Stores the current page index so that it can be restored when the file is reloaded.
   int? initialPageIndex;
 
+  /// The sequence number of the last realtime operation applied to this note,
+  /// or null if this note has never been synced in realtime.
+  int? realtimeSeq;
+
+  /// Local operations that the realtime server hasn't acknowledged yet.
+  /// They're saved with the note so that offline edits are sent later.
+  List<Map<String, dynamic>> pendingOps = [];
+
   static final placeholder =
       EditorCoreInfo._(
         filePath: '',
@@ -118,7 +127,10 @@ class EditorCoreInfo {
     required this.pages,
     required this.initialPageIndex,
     required AssetCache? assetCache,
-  }) : assetCache = assetCache ?? AssetCache() {
+    this.realtimeSeq,
+    List<Map<String, dynamic>>? pendingOps,
+  }) : assetCache = assetCache ?? AssetCache(),
+       pendingOps = pendingOps ?? [] {
     _handleEmptyImageIds();
   }
 
@@ -193,6 +205,10 @@ class EditorCoreInfo {
         ),
         initialPageIndex: json['c'] as int?,
         assetCache: assetCache,
+        realtimeSeq: (json['rs'] as num?)?.toInt(),
+        pendingOps: (json['rq'] as List?)
+            ?.map((op) => Map<String, dynamic>.from(op as Map))
+            .toList(),
       )
       .._migrateOldStrokesAndImages(
         fileVersion: fileVersion,
@@ -340,6 +356,23 @@ class EditorCoreInfo {
         }
       }
     }
+
+    assignPageIds();
+  }
+
+  /// Gives an id to each page that doesn't have one yet.
+  ///
+  /// The ids are derived from the preceding page so that every device
+  /// gives the same id to the same page of a note.
+  void assignPageIds() {
+    for (int i = 0; i < pages.length; ++i) {
+      if (pages[i].id.isNotEmpty) continue;
+      var id = i == 0 ? firstPageId : derivePageId(pages[i - 1].id);
+      while (pages.any((page) => page.id == id)) {
+        id = derivePageId(id);
+      }
+      pages[i].id = id;
+    }
   }
 
   void _sortStrokes() {
@@ -482,6 +515,8 @@ class EditorCoreInfo {
       'lt': lineThickness,
       'z': pages.map((EditorPage page) => page.toJson(assets)).toList(),
       'c': initialPageIndex,
+      if (realtimeSeq != null) 'rs': realtimeSeq,
+      if (pendingOps.isNotEmpty) 'rq': pendingOps,
     };
 
     return (json, assets);
@@ -555,6 +590,8 @@ class EditorCoreInfo {
       pages: pages ?? this.pages,
       initialPageIndex: initialPageIndex,
       assetCache: assetCache,
+      realtimeSeq: realtimeSeq,
+      pendingOps: pendingOps,
     );
   }
 }

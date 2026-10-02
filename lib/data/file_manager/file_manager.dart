@@ -27,13 +27,27 @@ class FileManager {
 
   static final log = Logger('FileManager');
 
-  static const appRootDirectoryPrefix = 'Saber';
+  static const appRootDirectoryPrefix = 'NotePlus';
 
   /// This isn't final because isolates sometimes init multiple times.
   /// Realistically, this value never changes.
   static late String documentsDirectory;
 
   static final fileWriteStream = StreamController<FileOperation>.broadcast();
+
+  /// Called with the path of a note (without its extension)
+  /// when the user deletes it, or moves it to another path.
+  static void Function(String notePath)? onNoteRemoved;
+
+  static void _notifyNoteRemoved(String filePath) {
+    for (final extension in const [Editor.extension, Editor.extensionOldJson]) {
+      if (!filePath.endsWith(extension)) continue;
+      onNoteRemoved?.call(
+        filePath.substring(0, filePath.length - extension.length),
+      );
+      return;
+    }
+  }
 
   // TODO(adil192): Implement or remove this
   static String _sanitisePath(String path) => File(path).path;
@@ -307,7 +321,7 @@ class FileManager {
           await SaverGallery.saveImage(
             Uint8List.fromList(bytes),
             fileName: fileName,
-            albumPath: 'Saber',
+            albumPath: 'Note+',
             skipIfExists: true,
           );
         }
@@ -407,6 +421,7 @@ class FileManager {
     syncer.uploader.enqueueRel(toPath);
 
     _renameReferences(fromPath, toPath);
+    _notifyNoteRemoved(fromPath);
     broadcastFileWrite(FileOperationType.delete, fromPath);
     broadcastFileWrite(FileOperationType.write, toPath);
 
@@ -452,7 +467,10 @@ class FileManager {
     if (!file.existsSync()) return;
     await file.delete();
 
-    if (alsoUpload) syncer.uploader.enqueueRel(filePath);
+    if (alsoUpload) {
+      syncer.uploader.enqueueRel(filePath);
+      _notifyNoteRemoved(filePath);
+    }
 
     _removeReferences(filePath);
     broadcastFileWrite(FileOperationType.delete, filePath);
@@ -517,6 +535,7 @@ class FileManager {
 
     for (final child in children) {
       _renameReferences(directoryPath + child, newPath + child);
+      _notifyNoteRemoved(directoryPath + child);
       broadcastFileWrite(FileOperationType.delete, directoryPath + child);
       broadcastFileWrite(FileOperationType.write, newPath + child);
     }

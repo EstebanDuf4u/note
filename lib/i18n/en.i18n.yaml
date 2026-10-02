@@ -20,7 +20,7 @@ home:
   create:
     newNote: New note
     importNote: Import note
-  welcome: Welcome to Saber
+  welcome: Welcome to Note+
   invalidFormat: The file you selected is not supported. Please select an sbn, sbn2, sba, or pdf file.
   noFiles: No files found
   noPreviewAvailable: No preview available
@@ -106,7 +106,7 @@ settings:
     layoutSize: Layout type
     customAccentColor: Custom accent color
     hyperlegibleFont: Atkinson Hyperlegible font
-    shouldCheckForUpdates: Check for Saber updates
+    shouldCheckForUpdates: Check for Note+ updates
     shouldAlwaysAlertForUpdates: Faster updates
     allowInsecureConnections: Allow insecure connections
     editorToolbarAlignment: Toolbar position
@@ -125,11 +125,11 @@ settings:
     autosave: Auto-save
     shapeRecognitionDelay: Shape recognition delay
     autoStraightenLines: Auto straighten lines
-    customDataDir: Custom Saber folder
+    customDataDir: Custom Note+ folder
     sentry: Error reporting
   prefDescriptions:
     hyperlegibleFont: Increases legibility for users with low vision
-    allowInsecureConnections: (Not recommended) Allow Saber to connect to servers with self-signed/untrusted certificates
+    allowInsecureConnections: (Not recommended) Allow Note+ to connect to servers with self-signed/untrusted certificates
     preferGreyscale: For e-ink displays
     autoClearWhiteboardOnExit: Clears the whiteboard after you exit the app
     disableEraserAfterUse: Automatically switches back to the pen after using the eraser
@@ -170,7 +170,7 @@ settings:
     title: Reset this setting?
     button: Reset
   resyncEverything: Resync everything
-  openDataDir: Open Saber folder
+  openDataDir: Open Note+ folder
   customDataDir:
     cancel: Cancel
     select: Select
@@ -227,6 +227,37 @@ login:
         Saber will generate your encryption keys from this password automatically.
     - q: Can I use the same password as my Nextcloud account?
       a: Yes, but keep in mind that it would be easier for the server administrator or someone else to access your notes if they gain access to your Nextcloud account.
+account:
+  title: Note+ account
+  signedOut: Not signed in
+  tapToSignIn: Sign in to sync your notes between your devices
+  signedInAs: Signed in as $u
+  intro: Sign in on each of your devices, and your notes will be kept in sync between them as you write.
+  limitations: Handwriting, pages and paper styles are synced. Text and images aren't synced yet.
+  server: Server address
+  serverHint: For example 192.168.1.10:8787
+  username: Username
+  password: Password
+  signIn: Sign in
+  createAccount: Create an account
+  signOut: Sign out
+  signOutNote: Your notes will stay on this device.
+  syncNow: Sync now
+  status:
+    syncing: Syncing your notes…
+    upToDate: Your notes are up to date
+    offline: Can't reach the server. Trying again shortly…
+  errors:
+    missingFields: Enter the server address, your username and your password.
+    invalidServer: This isn't the address of a Note+ server.
+    unreachable: Can't reach the server. Check the address and your connection.
+    wrongCredentials: Wrong username or password.
+    usernameTaken: This username is already taken.
+    invalidUsername: Usernames have 3 to 32 letters, digits, dots, dashes or underscores.
+    weakPassword: Use a password of at least 8 characters.
+    registrationClosed: This server doesn't accept new accounts.
+    tooManyAttempts: Too many wrong passwords. Try again in a few minutes.
+    unknown: Something went wrong on the server.
 profile:
   title: My profile
   logout: Log out
@@ -268,6 +299,10 @@ update:
   update: Update
   downloadNotAvailableYet: The download isn't available yet for your platform. Please check back shortly.
 editor:
+  realtime:
+    offline: Realtime sync is offline. Your changes will be sent when it reconnects.
+    catchingUp: Catching up with your other devices…
+    live: Synced in realtime
   toolbar:
     toggleColors: Toggle colors (Ctrl C)
     select: Select
@@ -360,7 +395,7 @@ editor:
     watchingServer: You are currently watching for updates on the server. Editing is disabled in this mode.
     corrupted: Failed to load note. It may be corrupted or still being downloaded.
   versionTooNew:
-    title: This note was edited using a newer version of Saber
+    title: This note was edited using a newer version of Note+
     subtitle: Editing this note may result in some information being lost. Do you want to ignore this and edit it anyway?
     allowEditing: Allow editing
   quill:
