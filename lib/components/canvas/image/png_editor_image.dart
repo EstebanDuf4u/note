@@ -122,6 +122,16 @@ class PngEditorImage extends EditorImage {
         ..addAll({if (imageProvider != null) 'a': assets.add(imageProvider!)});
 
   @override
+  Object get assetSource => switch (imageProvider) {
+    (final MemoryImage image) => image.bytes,
+    (final FileImage image) => image.file,
+    _ => throw StateError(
+      'PngEditorImage.assetSource: '
+      'imageProvider is ${imageProvider.runtimeType}',
+    ),
+  };
+
+  @override
   Future<void> firstLoad() async {
     assert(Isolate.current.debugName == 'main');
 

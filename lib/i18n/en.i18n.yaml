@@ -233,7 +233,8 @@ account:
   tapToSignIn: Sign in to sync your notes between your devices
   signedInAs: Signed in as $u
   intro: Sign in on each of your devices, and your notes will be kept in sync between them as you write.
-  limitations: Handwriting, pages and paper styles are synced. Text and images aren't synced yet.
+  limitations: Handwriting, pages, images and text are synced. If the text of a page is changed on two devices at the same time, the last change is kept.
+  signInRequired: Sign in to open your notes.
   server: Server address
   serverHint: For example 192.168.1.10:8787
   username: Username

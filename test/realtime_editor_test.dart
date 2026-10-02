@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:bson/bson.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golden_screenshot/golden_screenshot.dart';
 import 'package:noteplus_server/relay_server.dart';
+import 'package:saber/components/canvas/image/editor_image.dart';
 import 'package:saber/components/canvas/save_indicator.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/flavor_config.dart';
@@ -16,6 +18,12 @@ import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/editor.dart';
 
 import 'utils/test_mock_channel_handlers.dart';
+
+/// A 1x1 png.
+final _pngBytes = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA'
+  '60e6kgAAAABJRU5ErkJggg==',
+);
 
 /// A second device, which only speaks the realtime protocol.
 class _OtherDevice {
@@ -159,6 +167,76 @@ void main() {
       'ids': ['from-the-other-device'],
     });
     await until(() => strokes.isEmpty, 'the remote erase to arrive');
+
+    // typing in the editor reaches the other device, a little later
+    final page = editorState.coreInfo.pages.first;
+    other.messages.clear();
+    page.quill.controller.replaceText(0, 0, 'Hello', null);
+    await tester.pump(const Duration(milliseconds: 400));
+    await until(() => other.ops.isNotEmpty, 'the text to be sent');
+    expect(other.ops.single['t'], NoteOps.textType);
+    expect(other.ops.single['pg'], page.id);
+    expect(other.ops.single['q'], [
+      {'insert': 'Hello\n'},
+    ]);
+
+    // text from the other device appears in the editor,
+    // and isn't something that this device can undo
+    final undoableChanges = editorState.history.canUndo;
+    other.sendOp({
+      't': NoteOps.textType,
+      'pg': page.id,
+      'q': [
+        {'insert': 'Hello from afar\n'},
+      ],
+    });
+    await until(
+      () => page.quill.controller.document.toPlainText() == 'Hello from afar\n',
+      'the remote text to arrive',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(editorState.history.canUndo, undoableChanges);
+    expect(
+      other.ops.where((op) => op['t'] == NoteOps.textType),
+      hasLength(1),
+      reason: "The other device's text shouldn't be sent back to it",
+    );
+
+    // an image from the other device appears in the editor
+    EditorImage.shouldLoadOutImmediately = true;
+    addTearDown(() => EditorImage.shouldLoadOutImmediately = false);
+    final imageOps = NoteOps.addImage(
+      PngEditorImage(
+        id: 0,
+        extension: '.png',
+        imageProvider: MemoryImage(_pngBytes),
+        pageIndex: 0,
+        pageSize: page.size,
+        onMoveImage: null,
+        onDeleteImage: null,
+        onMiscChange: null,
+        assetCache: editorState.coreInfo.assetCache,
+        dstRect: const Rect.fromLTWH(100, 100, 200, 200),
+        srcRect: const Rect.fromLTWH(0, 0, 1, 1),
+        naturalSize: const Size(1, 1),
+      ),
+      page,
+      editorState.coreInfo,
+      sentAssets: {},
+    );
+    imageOps.forEach(other.sendOp);
+    await until(() => page.images.isNotEmpty, 'the remote image to arrive');
+    final image = page.images.single;
+    expect(image.dstRect, const Rect.fromLTWH(100, 100, 200, 200));
+    expect(image.onDeleteImage, isNotNull);
+
+    // and deleting it here reaches the other device
+    other.messages.clear();
+    image.onDeleteImage!(image);
+    await tester.pump();
+    await until(() => other.ops.isNotEmpty, 'the image removal to be sent');
+    expect(other.ops.single['t'], NoteOps.removeImagesType);
+    expect(other.ops.single['ids'], [image.uid]);
 
     // closing the editor exits fullscreen
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(

@@ -1,11 +1,16 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:bson/bson.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' show Attribute;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:noteplus_server/relay_server.dart';
 import 'package:perfect_freehand/perfect_freehand.dart';
+import 'package:saber/components/canvas/_asset_cache.dart';
 import 'package:saber/components/canvas/_stroke.dart';
+import 'package:saber/components/canvas/image/editor_image.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/editor_history.dart';
 import 'package:saber/data/editor/ids.dart';
@@ -14,6 +19,12 @@ import 'package:saber/data/flavor_config.dart';
 import 'package:saber/data/sync/realtime/note_ops.dart';
 import 'package:saber/data/sync/realtime/realtime_session.dart';
 import 'package:sbn/change.dart';
+
+/// A 1x1 png.
+final _pngBytes = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA'
+  '60e6kgAAAABJRU5ErkJggg==',
+);
 
 /// The session of the account that the devices are signed in to.
 var _token = '';
@@ -154,6 +165,93 @@ class _Device {
     );
   }
 
+  /// Adds an image as if the user had picked it and it had been sized.
+  EditorImage addImage(
+    int pageIndex, {
+    Uint8List? bytes,
+    Rect rect = const Rect.fromLTWH(10, 20, 100, 50),
+  }) {
+    final image = PngEditorImage(
+      id: coreInfo.nextImageId++,
+      extension: '.png',
+      imageProvider: MemoryImage(bytes ?? _pngBytes),
+      pageIndex: pageIndex,
+      pageSize: pages[pageIndex].size,
+      onMoveImage: null,
+      onDeleteImage: null,
+      onMiscChange: null,
+      assetCache: coreInfo.assetCache,
+      dstRect: rect,
+      srcRect: const Rect.fromLTWH(0, 0, 1, 1),
+      naturalSize: const Size(1, 1),
+    );
+    createPage(pageIndex);
+    pages[pageIndex].images.add(image);
+    lastOps = record(
+      EditorHistoryItem(
+        type: .draw,
+        pageIndex: pageIndex,
+        strokes: [],
+        images: [image],
+      ),
+    );
+    return image;
+  }
+
+  void eraseImages(List<EditorImage> images) {
+    for (final page in pages) {
+      page.images.removeWhere(images.contains);
+    }
+    removeExcessPages();
+    lastOps = record(
+      EditorHistoryItem(
+        type: .erase,
+        pageIndex: 0,
+        strokes: [],
+        images: images,
+      ),
+    );
+  }
+
+  void moveImage(EditorImage image, Rect rect) {
+    final offset = Rect.fromLTRB(
+      rect.left - image.dstRect.left,
+      rect.top - image.dstRect.top,
+      rect.right - image.dstRect.right,
+      rect.bottom - image.dstRect.bottom,
+    );
+    image.dstRect = rect;
+    lastOps = record(
+      EditorHistoryItem(
+        type: .move,
+        pageIndex: image.pageIndex,
+        strokes: [],
+        images: [image],
+        offset: offset,
+      ),
+    );
+  }
+
+  void setAsBackground(EditorImage image) {
+    final page = pages.firstWhere((page) => page.images.contains(image));
+    page.images.remove(image);
+    page.backgroundImage = image;
+    lastOps = [NoteOps.updateImage(image, coreInfo)];
+    session?.submit(lastOps);
+  }
+
+  /// Types [text] at the start of the page, as the editor sends it.
+  void type(int pageIndex, String text) {
+    final page = pages[pageIndex];
+    page.quill.controller.replaceText(0, 0, text, null);
+    createPage(pageIndex);
+    lastOps = [NoteOps.text(page)];
+    session?.submit(lastOps);
+  }
+
+  String textOf(int pageIndex) =>
+      pages[pageIndex].quill.controller.document.toPlainText();
+
   EditorPage insertPageAfter(int pageIndex) {
     final page = EditorPage(id: newId());
     pages.insert(pageIndex + 1, page);
@@ -198,8 +296,15 @@ class _Device {
   List<String> get contents => [
     for (final page in pages)
       '${page.id} ${page.size.width.round()}x${page.size.height.round()}: '
-          '${page.strokes.map(_describeStroke).join(' ')}',
+          '${page.strokes.map(_describeStroke).join(' ')}'
+          ' | ${page.images.map(_describeImage).join(' ')}'
+          ' | ${page.backgroundImage == null ? '' : _describeImage(page.backgroundImage!)}'
+          ' | ${jsonEncode(page.quill.controller.document.toDelta().toJson())}',
   ];
+
+  static String _describeImage(EditorImage image) =>
+      '${image.uid}@${image.dstRect}/${image.srcRect}'
+      '=${NoteAssets.hashOf(image.assetSource)}';
 
   static String _describeStroke(Stroke stroke) {
     final bounds = stroke.lowQualityPath.getBounds();
@@ -299,6 +404,176 @@ void main() {
       expect(b.contents, a.contents);
     });
 
+    test('redoing after undoing brings a stroke back', () {
+      final a = _Device('a'), b = _Device('b');
+      final stroke = a.draw(0);
+      final drawOps = a.lastOps;
+      b.receive(drawOps);
+
+      a.erase([stroke]);
+      b.receive(a.lastOps);
+      expect(b.pages.first.strokes, isEmpty);
+
+      a.pages.first.insertStroke(stroke);
+      a.createPage(0);
+      b.receive(drawOps);
+      expect(b.pages.first.strokes, hasLength(1));
+      expect(b.contents, a.contents);
+    });
+
+    test('add, move and remove an image', () {
+      final a = _Device('a'), b = _Device('b');
+      final image = a.addImage(0);
+      expect(a.lastOps.map((op) => op['t']), [
+        NoteOps.assetChunkType,
+        NoteOps.addImageType,
+      ]);
+      b.receive(a.lastOps);
+      expect(b.contents, a.contents);
+      expect(b.pages, hasLength(2), reason: 'Should add a blank last page');
+      final received = b.pages.first.images.single as PngEditorImage;
+      expect((received.imageProvider! as MemoryImage).bytes, _pngBytes);
+
+      // receiving it twice doesn't add it twice
+      b.receive(a.lastOps);
+      expect(b.contents, a.contents);
+
+      a.moveImage(image, const Rect.fromLTWH(200, 300, 50, 25));
+      b.receive(a.lastOps);
+      expect(received.dstRect, const Rect.fromLTWH(200, 300, 50, 25));
+
+      a.setAsBackground(image);
+      b.receive(a.lastOps);
+      expect(b.pages.first.backgroundImage, received);
+      expect(b.contents, a.contents);
+
+      a.pages.first
+        ..backgroundImage = null
+        ..images.add(image);
+      b.receive([NoteOps.updateImage(image, a.coreInfo)]);
+      expect(b.contents, a.contents);
+
+      a.eraseImages([image]);
+      b.receive(a.lastOps);
+      expect(b.pages.first.images, isEmpty);
+      expect(b.contents, a.contents);
+      expect(b.pages, hasLength(1), reason: 'Should remove the excess page');
+    });
+
+    test('an image keeps its uid when saved', () {
+      final a = _Device('a');
+      final image = a.addImage(0);
+      final copy = EditorImage.fromJson(
+        {...image.toJson(OrderedAssetCache()), 'a': 0},
+        inlineAssets: [_pngBytes],
+        sbnPath: '/note',
+        assetCache: a.coreInfo.assetCache,
+      );
+      expect(copy.uid, image.uid);
+      expect(image.copy().uid, isNot(image.uid));
+    });
+
+    test('a large asset is sent in pieces, and only once', () {
+      final a = _Device('a'), b = _Device('b');
+      final bytes = Uint8List.fromList([
+        ..._pngBytes,
+        // what follows the png is ignored when it's decoded
+        for (int i = 0; i < NoteAssets.chunkSize * 2 + 10; ++i) i % 251,
+      ]);
+
+      final first = a.addImage(0, bytes: bytes);
+      expect(a.lastOps, hasLength(4), reason: '3 pieces and the image');
+      b.receive(a.lastOps);
+      final received = b.pages.first.images.single as PngEditorImage;
+      expect((received.imageProvider! as MemoryImage).bytes, bytes);
+
+      // a copy of the image uses the asset that the other device has
+      final copy = first.copy()..id = a.coreInfo.nextImageId++;
+      a.pages.first.images.add(copy);
+      final ops = a.record(
+        EditorHistoryItem(
+          type: .draw,
+          pageIndex: 0,
+          strokes: [],
+          images: [copy],
+        ),
+      );
+      expect(ops.single['t'], NoteOps.addImageType);
+      b.receive(ops);
+      expect(b.contents, a.contents);
+
+      // even if the other device restarted since it received the asset
+      final c = _Device('c')..receive(NoteOps.snapshot(a.coreInfo));
+      c.applier.assets.clear();
+      final another = first.copy()..id = a.coreInfo.nextImageId++;
+      a.pages.first.images.add(another);
+      c.receive(
+        a.record(
+          EditorHistoryItem(
+            type: .draw,
+            pageIndex: 0,
+            strokes: [],
+            images: [another],
+          ),
+        ),
+      );
+      expect(c.contents, a.contents);
+    });
+
+    test('an image that is still loading is sent later', () {
+      final a = _Device('a');
+      final image = a.addImage(0);
+      a.applier.unsizedImages.add(image);
+      final item = EditorHistoryItem(
+        type: .draw,
+        pageIndex: 0,
+        strokes: [],
+        images: [image],
+      );
+      for (final inverse in [false, true]) {
+        expect(
+          NoteOps.fromHistoryItem(
+            item,
+            a.coreInfo,
+            inverse: inverse,
+            skipImages: a.applier.unsizedImages,
+          ),
+          isEmpty,
+        );
+      }
+      expect(
+        NoteOps.snapshot(
+          a.coreInfo,
+          skipImages: a.applier.unsizedImages,
+        ).map((op) => op['t']),
+        [NoteOps.backgroundPatternType, NoteOps.insertPageType],
+      );
+    });
+
+    test('text', () {
+      final a = _Device('a'), b = _Device('b');
+      a.type(0, 'Hello');
+      b.receive(a.lastOps);
+      expect(b.textOf(0), 'Hello\n');
+      expect(b.pages, hasLength(2), reason: 'Should add a blank last page');
+      expect(b.contents, a.contents);
+
+      // the receiving device can't undo what the other device typed
+      expect(b.pages.first.quill.controller.hasUndo, isFalse);
+
+      a.pages.first.quill.controller.formatText(0, 5, Attribute.bold);
+      b.receive([NoteOps.text(a.pages.first)]);
+      expect(b.contents, a.contents);
+
+      // local changes that are about to be sent aren't overwritten
+      b.type(0, 'B: ');
+      a.type(0, 'A: ');
+      b.applier.apply(a.lastOps.single, pendingLocalOps: b.lastOps);
+      expect(b.textOf(0), 'B: Hello\n');
+      a.receive(b.lastOps);
+      expect(a.contents, b.contents);
+    });
+
     test('inserting and deleting pages', () {
       final a = _Device('a'), b = _Device('b');
       a.draw(0);
@@ -352,8 +627,35 @@ void main() {
       a.draw(0);
       a.insertPageAfter(0);
       a.draw(2, at: const Offset(5, 5));
+      a.addImage(0);
+      a.setAsBackground(a.addImage(2));
+      a.type(1, 'Some text');
 
       b.receive(NoteOps.snapshot(a.coreInfo));
+      expect(b.contents, a.contents);
+    });
+
+    test('a page is inserted with its images and text', () {
+      final a = _Device('a'), b = _Device('b');
+      a.draw(0);
+      b.receive(a.lastOps);
+
+      final page = EditorPage(id: newId());
+      a.pages.insert(1, page);
+      page.images.add(a.addImage(0));
+      a.pages.first.images.clear();
+      page.quill.controller.replaceText(0, 0, 'On the new page', null);
+      b.receive(
+        a.record(
+          EditorHistoryItem(
+            type: .insertPage,
+            pageIndex: 1,
+            strokes: const [],
+            images: const [],
+            page: page,
+          ),
+        ),
+      );
       expect(b.contents, a.contents);
     });
   });
@@ -455,6 +757,76 @@ void main() {
       await inSync(a, b);
       expect(b.pages[1].strokes, hasLength(1));
       expect(a.coreInfo.realtimeSeq, isNotNull);
+    });
+
+    test('images and text reach the other device', () async {
+      final a = device('a'), b = device('b');
+      await live(a);
+      await live(b);
+
+      final image = a.addImage(0);
+      a.type(0, 'Typed on a');
+      await inSync(a, b);
+      expect(b.pages.first.images.single.uid, image.uid);
+      expect(b.textOf(0), 'Typed on a\n');
+
+      b.moveImage(
+        b.pages.first.images.single,
+        const Rect.fromLTWH(1, 2, 30, 40),
+      );
+      b.type(1, 'Typed on b');
+      await inSync(a, b);
+      expect(image.dstRect, const Rect.fromLTWH(1, 2, 30, 40));
+      expect(a.textOf(1), 'Typed on b\n');
+    });
+
+    test('text typed on two devices at once ends up the same', () async {
+      final a = device('a'), b = device('b');
+      await live(a);
+      await live(b);
+
+      a.type(0, 'from a');
+      b.type(0, 'from b');
+      await inSync(a, b);
+      expect(a.textOf(0), anyOf('from a\n', 'from b\n'));
+    });
+
+    test('an existing note is shared with its images and text', () async {
+      final a = _Device('a');
+      devices.add(a);
+      a.addImage(0);
+      a.type(1, 'Written before signing in');
+      expect(a.coreInfo.realtimeSeq, isNull);
+
+      a.connect(server);
+      final b = device('b');
+      await inSync(a, b);
+      expect(b.pages.first.images, hasLength(1));
+      expect(b.textOf(1), 'Written before signing in\n');
+    });
+
+    test('offline text is sent once after reconnecting', () async {
+      final a = device('a'), b = device('b');
+      await live(a);
+      await live(b);
+      a.type(0, 'a');
+      await inSync(a, b);
+
+      final port = server.port;
+      await server.stop();
+      await _until(() => a.session!.state.value == .offline);
+      a.type(0, 'b');
+      a.type(0, 'c');
+      expect(
+        a.coreInfo.pendingOps,
+        hasLength(1),
+        reason: 'Only the last version of the text is kept',
+      );
+
+      server = RelayServer(dataDirectory: dataDirectory);
+      await server.start(address: InternetAddress.loopbackIPv4, port: port);
+      await inSync(a, b);
+      expect(b.textOf(0), 'cba\n');
     });
 
     test('two existing notes are merged', () async {

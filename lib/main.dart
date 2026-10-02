@@ -24,6 +24,7 @@ import 'package:saber/data/prefs.dart';
 import 'package:saber/data/routes.dart';
 import 'package:saber/data/sentry/sentry_init.dart';
 import 'package:saber/data/sync/realtime/account_syncer.dart';
+import 'package:saber/data/sync/realtime/realtime_account.dart';
 import 'package:saber/data/tools/stroke_properties.dart';
 import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/editor.dart';
@@ -96,6 +97,8 @@ Future<void> appRunner(List<String> args) async {
     stows.locale.waitUntilRead(),
     stows.url.waitUntilRead(),
     stows.allowInsecureConnections.waitUntilRead(),
+    // the first page shown depends on whether the user is signed in
+    RealtimeAccount.waitUntilLoaded(),
     PencilShader.init(),
     Printing.info().then((info) {
       Editor.canRasterPdf = info.canRaster;
@@ -241,6 +244,15 @@ class const App({super.key}) extends StatefulWidget {
   });
   static final _router = GoRouter(
     initialLocation: initialLocation,
+    // The app is only usable when signed in to a Note+ account.
+    refreshListenable: Listenable.merge([
+      stows.realtimeToken,
+      stows.realtimeUrl,
+    ]),
+    redirect: (context, state) => accountRedirect(
+      state.matchedLocation,
+      isSignedIn: RealtimeAccount.isSignedIn,
+    ),
     routes: <GoRoute>[
       GoRoute(path: '/', redirect: (context, state) => initialLocation),
       GoRoute(
@@ -265,6 +277,11 @@ class const App({super.key}) extends StatefulWidget {
         path: RoutePaths.account,
         builder: (context, state) => const RealtimeAccountPage(),
       ),
+      GoRoute(
+        path: RoutePaths.signIn,
+        builder: (context, state) =>
+            const RealtimeAccountPage(mustSignIn: true),
+      ),
       GoRoute(path: '/profile', redirect: (context, state) => RoutePaths.login),
       GoRoute(
         path: RoutePaths.logs,
@@ -272,6 +289,15 @@ class const App({super.key}) extends StatefulWidget {
       ),
     ],
   );
+
+  /// Returns where to go instead of [location], if the user may not see it:
+  /// everything but the sign in page requires an account.
+  @visibleForTesting
+  static String? accountRedirect(String location, {required bool isSignedIn}) {
+    final isSigningIn = location == RoutePaths.signIn;
+    if (!isSignedIn) return isSigningIn ? null : RoutePaths.signIn;
+    return isSigningIn ? initialLocation : null;
+  }
 
   static void openFile(SharedFile file) async {
     final filePath = file.value;

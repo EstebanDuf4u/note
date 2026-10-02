@@ -6,6 +6,7 @@ import 'package:bson/bson.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
+import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/sync/realtime/note_ops.dart';
 
 enum RealtimeState {
@@ -43,6 +44,7 @@ class RealtimeSession {
     required this.onRemoteChange,
     required this.onLocalStateChange,
     this.onStopped,
+    this.hasUnsentText,
     this.minReconnectDelay = const Duration(seconds: 1),
     this.maxReconnectDelay = const Duration(seconds: 30),
   });
@@ -74,6 +76,10 @@ class RealtimeSession {
 
   /// Called when this session gives up on syncing the note.
   final void Function(RealtimeStopReason reason)? onStopped;
+
+  /// Returns whether the text of a page has changes
+  /// that haven't been passed to [submit] yet.
+  final bool Function(EditorPage page)? hasUnsentText;
 
   final Duration minReconnectDelay, maxReconnectDelay;
 
@@ -115,11 +121,22 @@ class RealtimeSession {
     if (coreInfo.realtimeSeq == null && state.value != .live) return;
 
     for (final op in ops) {
+      if (state.value != .live) _dropSupersededText(coreInfo, op);
       final envelope = <String, dynamic>{'cid': _newOpId(), 'd': op};
       coreInfo.pendingOps.add(envelope);
       if (state.value == .live) _send({'k': 'op', ...envelope});
     }
     onLocalStateChange();
+  }
+
+  /// A page's text is sent whole, so while we're offline only
+  /// the last version of it needs to be kept in the queue.
+  static void _dropSupersededText(EditorCoreInfo coreInfo, NoteOp op) {
+    if (op['t'] != NoteOps.textType) return;
+    coreInfo.pendingOps.removeWhere((pending) {
+      final queued = pending['d'] as Map;
+      return queued['t'] == NoteOps.textType && queued['pg'] == op['pg'];
+    });
   }
 
   /// Queues [ops] in [coreInfo] to be sent the next time it's synced,
@@ -128,6 +145,7 @@ class RealtimeSession {
     // A note that has never been synced is sent as a whole.
     if (coreInfo.realtimeSeq == null) return;
     for (final op in ops) {
+      _dropSupersededText(coreInfo, op);
       coreInfo.pendingOps.add({'cid': _newOpId(), 'd': op});
     }
   }
@@ -155,6 +173,7 @@ class RealtimeSession {
     state.value = .catchingUp;
     _needsSnapshot = coreInfo.realtimeSeq == null;
     applier.addedStrokeIds.clear();
+    applier.addedImageIds.clear();
 
     socket.listen(
       (data) => _onMessage(socket, data),
@@ -224,6 +243,8 @@ class RealtimeSession {
       _removePending(cid);
       if (op['t'] == NoteOps.addStrokeType) {
         applier.addedStrokeIds.add((op['s'] as Map)['id'] as String);
+      } else if (op['t'] == NoteOps.addImageType) {
+        applier.addedImageIds.add((op['m'] as Map)['u'] as String);
       }
     } else {
       try {
@@ -235,6 +256,10 @@ class RealtimeSession {
           // An unsynced note's strokes are all sent once we've caught up
           isUnsent: (stroke) =>
               _needsSnapshot && !applier.addedStrokeIds.contains(stroke.id),
+          // An unsynced note's text is sent once we've caught up too
+          keepLocalText: (page) =>
+              (_needsSnapshot && !page.quill.controller.document.isEmpty()) ||
+              (hasUnsentText?.call(page) ?? false),
         );
       } catch (e, st) {
         log.severe('Failed to apply operation $seq: $e', e, st);
@@ -267,7 +292,12 @@ class RealtimeSession {
       _needsSnapshot = false;
       coreInfo.pendingOps.clear();
       submit(
-        NoteOps.snapshot(coreInfo, knownStrokeIds: applier.addedStrokeIds),
+        NoteOps.snapshot(
+          coreInfo,
+          knownStrokeIds: applier.addedStrokeIds,
+          knownImageIds: applier.addedImageIds,
+          skipImages: applier.unsizedImages,
+        ),
       );
     } else {
       for (final envelope in coreInfo.pendingOps) {

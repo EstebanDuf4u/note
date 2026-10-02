@@ -240,8 +240,11 @@ class Translations$account$en {
 	/// en: 'Sign in on each of your devices, and your notes will be kept in sync between them as you write.'
 	String get intro => 'Sign in on each of your devices, and your notes will be kept in sync between them as you write.';
 
-	/// en: 'Handwriting, pages and paper styles are synced. Text and images aren't synced yet.'
-	String get limitations => 'Handwriting, pages and paper styles are synced. Text and images aren\'t synced yet.';
+	/// en: 'Handwriting, pages, images and text are synced. If the text of a page is changed on two devices at the same time, the last change is kept.'
+	String get limitations => 'Handwriting, pages, images and text are synced. If the text of a page is changed on two devices at the same time, the last change is kept.';
+
+	/// en: 'Sign in to open your notes.'
+	String get signInRequired => 'Sign in to open your notes.';
 
 	/// en: 'Server address'
 	String get server => 'Server address';

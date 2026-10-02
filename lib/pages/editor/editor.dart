@@ -241,14 +241,8 @@ class EditorState extends State<Editor> {
       createPage(-1);
     } else {
       for (final page in coreInfo.pages) {
-        page.backgroundImage?.onMoveImage = onMoveImage;
-        page.backgroundImage?.onDeleteImage = onDeleteImage;
-        page.backgroundImage?.onMiscChange = autosaveAfterDelay;
-        for (final image in page.images) {
-          image.onMoveImage = onMoveImage;
-          image.onDeleteImage = onDeleteImage;
-          image.onMiscChange = autosaveAfterDelay;
-        }
+        if (page.backgroundImage case final image?) _listenToImage(image);
+        page.images.forEach(_listenToImage);
       }
     }
 
@@ -310,7 +304,10 @@ class EditorState extends State<Editor> {
         removeExcessPages: removeExcessPages,
         onPageInserted: (page, pageIndex) =>
             listenToQuillChanges(page.quill, pageIndex),
+        onImageAdded: _listenToImage,
+        unsizedImages: _unsizedImages,
       ),
+      hasUnsentText: _pagesWithUnsentText.contains,
       onRemoteChange: () {
         if (!mounted) return;
         setState(() {});
@@ -333,13 +330,91 @@ class EditorState extends State<Editor> {
   /// Sends [item] (or the undoing of [item] if [inverse])
   /// to the user's other devices.
   void _submitRealtimeOps(EditorHistoryItem item, {required bool inverse}) {
-    final ops = NoteOps.fromHistoryItem(item, coreInfo, inverse: inverse);
+    // An image that was just picked is sent once we know its size.
+    for (final image in item.images) {
+      if (image.dstRect.shortestSide != 0) continue;
+      if (!_unsizedImages.add(image)) continue;
+      unawaited(_submitImageWhenSized(image));
+    }
+
+    _submitOps(
+      NoteOps.fromHistoryItem(
+        item,
+        coreInfo,
+        inverse: inverse,
+        skipImages: _unsizedImages,
+      ),
+    );
+  }
+
+  void _submitOps(List<NoteOp> ops) {
+    if (ops.isEmpty) return;
     if (_realtime case final realtime?) {
       realtime.submit(ops);
     } else {
       // e.g. the user is signed out for now
       RealtimeSession.queueForLater(coreInfo, ops);
     }
+  }
+
+  /// The images that are waiting for [_submitImageWhenSized].
+  final _unsizedImages = <EditorImage>{};
+
+  Future<void> _submitImageWhenSized(EditorImage image) async {
+    try {
+      await image.waitForFirstLoad();
+    } catch (e, st) {
+      log.severe('Failed to load an image before syncing it: $e', e, st);
+    }
+    _unsizedImages.remove(image);
+    if (!mounted) return;
+
+    // it may have been removed again while it was loading
+    final page = coreInfo.pages
+        .where(
+          (page) =>
+              page.images.contains(image) || page.backgroundImage == image,
+        )
+        .firstOrNull;
+    if (page == null) return;
+
+    _submitOps(NoteOps.addImage(image, page, coreInfo, sentAssets: {}));
+    autosaveAfterDelay();
+  }
+
+  /// Sends where and how [image] is shown to the user's other devices,
+  /// for the changes to an image that aren't recorded in [history].
+  void _submitImageUpdate(EditorImage? image) {
+    if (image == null || _unsizedImages.contains(image)) return;
+    _submitOps([NoteOps.updateImage(image, coreInfo)]);
+  }
+
+  void _listenToImage(EditorImage image) {
+    image
+      ..onMoveImage = onMoveImage
+      ..onDeleteImage = onDeleteImage
+      ..onMiscChange = () {
+        _submitImageUpdate(image);
+        autosaveAfterDelay();
+      };
+  }
+
+  /// The pages whose text has changed since it was last sent.
+  final _pagesWithUnsentText = <EditorPage>{};
+  Timer? _sendTextTimer;
+
+  /// Sends the text of the pages in [_pagesWithUnsentText].
+  ///
+  /// Text is sent a few times a second rather than on every keystroke.
+  void _sendUnsentText() {
+    _sendTextTimer?.cancel();
+    _sendTextTimer = null;
+    final pages = _pagesWithUnsentText.toList();
+    _pagesWithUnsentText.clear();
+    _submitOps([
+      for (final page in pages)
+        if (coreInfo.pages.contains(page)) NoteOps.text(page),
+    ]);
   }
 
   void _setState() => setState(() {});
@@ -892,6 +967,19 @@ class EditorState extends State<Editor> {
   void listenToQuillChanges(QuillStruct quill, int pageIndex) {
     quill.changeSubscription?.cancel();
     quill.changeSubscription = quill.controller.changes.listen((event) {
+      // the page may have moved since we started listening
+      final page = coreInfo.pages
+          .where((page) => page.quill == quill)
+          .firstOrNull;
+      if (page != null) pageIndex = coreInfo.pages.indexOf(page);
+
+      if (event.source == flutter_quill.ChangeSource.remote) {
+        // another device's change, which [_realtime] saves
+        createPage(pageIndex);
+        if (mounted) setState(() {});
+        return;
+      }
+
       final undoRedoButtonsNeedUpdating = !history.canUndo || history.canRedo;
       _addQuillChangeToHistory(
         quill: quill,
@@ -901,6 +989,13 @@ class EditorState extends State<Editor> {
       createPage(pageIndex); // create empty last page
       if (undoRedoButtonsNeedUpdating) {
         setState(() {});
+      }
+      if (page != null) {
+        _pagesWithUnsentText.add(page);
+        _sendTextTimer ??= Timer(
+          const Duration(milliseconds: 300),
+          _sendUnsentText,
+        );
       }
       autosaveAfterDelay();
     });
@@ -1236,6 +1331,7 @@ class EditorState extends State<Editor> {
             assetCache: coreInfo.assetCache,
           ),
     ];
+    images.forEach(_listenToImage);
 
     history.recordChange(
       EditorHistoryItem(
@@ -1335,6 +1431,7 @@ class EditorState extends State<Editor> {
           assetCache: coreInfo.assetCache,
         ),
       );
+      _listenToImage(page.backgroundImage!);
       coreInfo.pages.add(page);
       // TODO(adil192): Group multiple pages into one atomic change
       history.recordChange(
@@ -1571,6 +1668,7 @@ class EditorState extends State<Editor> {
                   ..id = coreInfo.nextImageId++
                   ..dstRect.shift(duplicationFeedbackOffset);
               }).toList();
+              duplicatedImages.forEach(_listenToImage);
 
               page.strokes.addAll(duplicatedStrokes);
               page.images.addAll(duplicatedImages);
@@ -1914,10 +2012,12 @@ class EditorState extends State<Editor> {
         if (coreInfo.readOnly) return;
 
         final page = coreInfo.pages[currentPageIndex];
-        if (page.backgroundImage == null) return;
-        page.images.add(page.backgroundImage!);
+        final image = page.backgroundImage;
+        if (image == null) return;
+        page.images.add(image);
         page.backgroundImage = null;
 
+        _submitImageUpdate(image);
         autosaveAfterDelay();
       }),
       redrawImage: () => setState(() {}),
@@ -1927,6 +2027,8 @@ class EditorState extends State<Editor> {
       clearAllPages: clearAllPages,
       redrawAndSave: () => setState(() {
         if (coreInfo.readOnly) return;
+        // e.g. how the background image fits the page
+        _submitImageUpdate(coreInfo.pages[currentPageIndex].backgroundImage);
         autosaveAfterDelay();
       }),
       pickPhotos: _pickPhotos,
@@ -1979,12 +2081,15 @@ class EditorState extends State<Editor> {
         return selectResult;
       }(),
       setAsBackground: (EditorImage image) {
-        if (page.backgroundImage != null) {
+        final previous = page.backgroundImage;
+        if (previous != null) {
           // restore previous background image as normal image
-          page.images.add(page.backgroundImage!);
+          page.images.add(previous);
         }
         page.images.remove(image);
         page.backgroundImage = image;
+        _submitImageUpdate(image);
+        _submitImageUpdate(previous);
 
         CanvasImage.activeListener
             .notifyListenersPlease(); // un-select active image
@@ -2027,6 +2132,8 @@ class EditorState extends State<Editor> {
           ),
           backgroundImage: page.backgroundImage?.copy()?..pageIndex += 1,
         )..id = newId();
+        if (newPage.backgroundImage case final image?) _listenToImage(image);
+        newPage.images.forEach(_listenToImage);
         coreInfo.pages.insert(pageIndex + 1, newPage);
         listenToQuillChanges(newPage.quill, pageIndex + 1);
         history.recordChange(
@@ -2197,6 +2304,7 @@ class EditorState extends State<Editor> {
     _delayedSaveTimer?.cancel();
     _watchServerTimer?.cancel();
     _lastSeenPointerCountTimer?.cancel();
+    _sendUnsentText();
     _syncedPathWhenClosed = _realtime?.room;
     _realtime?.dispose();
 
