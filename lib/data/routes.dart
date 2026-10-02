@@ -11,6 +11,9 @@ abstract class RoutePaths {
   static const edit = '/edit';
   static const login = '/login';
   static const account = '/account';
+
+  /// Where the user is sent until they've signed in to their account.
+  static const signIn = '/signin';
   static const logs = '/logs';
 
   static const prefixOfHome = '/home';

@@ -12,14 +12,21 @@ const _width = 400.0;
 
 /// Where the user signs in to (or out of) the Note+ account
 /// that keeps their notes in sync between their devices.
-class const RealtimeAccountPage({super.key}) extends HookWidget {
+///
+/// If [mustSignIn] is true, this is the page that the app shows
+/// until the user has signed in, so it can't be left.
+class const RealtimeAccountPage({super.key, final bool mustSignIn = false})
+    extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final token = useValueListenable(stows.realtimeToken);
+    // This can be the first page shown, before the user's language is loaded.
+    final t = Translations.of(context);
 
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: kToolbarHeight,
+        automaticallyImplyLeading: !mustSignIn,
         title: Text(t.account.title),
       ),
       body: SafeArea(
@@ -28,7 +35,9 @@ class const RealtimeAccountPage({super.key}) extends HookWidget {
             padding: const .all(16),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: _width),
-              child: token.isEmpty ? const _SignInForm() : const _SignedIn(),
+              child: token.isEmpty
+                  ? _SignInForm(mustSignIn: mustSignIn)
+                  : const _SignedIn(),
             ),
           ),
         ),
@@ -49,7 +58,7 @@ String _errorMessage(String code) => switch (code) {
   _ => t.account.errors.unknown,
 };
 
-class const _SignInForm() extends HookWidget {
+class const _SignInForm({final bool mustSignIn = false}) extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final server = useTextEditingController(text: stows.realtimeUrl.value);
@@ -95,6 +104,14 @@ class const _SignInForm() extends HookWidget {
         children: [
           Icon(Icons.sync, size: 48, color: colorScheme.primary),
           const SizedBox(height: 16),
+          if (mustSignIn) ...[
+            Text(
+              t.account.signInRequired,
+              textAlign: .center,
+              style: TextTheme.of(context).titleMedium,
+            ),
+            const SizedBox(height: 8),
+          ],
           Text(t.account.intro, textAlign: .center),
           const SizedBox(height: 24),
           TextField(

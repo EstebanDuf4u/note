@@ -101,6 +101,9 @@ class PdfEditorImage extends EditorImage {
   }
 
   @override
+  Object get assetSource => pdfFile ?? pdfBytes!;
+
+  @override
   Map<String, dynamic> toJson(OrderedAssetCache assets) {
     final json = super.toJson(assets);
 

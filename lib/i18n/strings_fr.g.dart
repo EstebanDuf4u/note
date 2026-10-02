@@ -175,7 +175,8 @@ class _Translations$account$fr extends Translations$account$en {
 	@override String get tapToSignIn => 'Connectez-vous pour synchroniser vos notes entre vos appareils';
 	@override String signedInAs({required Object u}) => 'Connecté en tant que ${u}';
 	@override String get intro => 'Connectez-vous sur chacun de vos appareils, et vos notes y seront synchronisées pendant que vous écrivez.';
-	@override String get limitations => 'L\'écriture, les pages et les styles de papier sont synchronisés. Le texte et les images ne le sont pas encore.';
+	@override String get limitations => 'L\'écriture, les pages, les images et le texte sont synchronisés. Si le texte d\'une page est modifié sur deux appareils en même temps, la dernière modification est conservée.';
+	@override String get signInRequired => 'Connectez-vous pour ouvrir vos notes.';
 	@override String get server => 'Adresse du serveur';
 	@override String get serverHint => 'Par exemple 192.168.1.10:8787';
 	@override String get username => 'Nom d\'utilisateur';

@@ -116,6 +116,12 @@ class SvgEditorImage extends EditorImage {
     return json;
   }
 
+  @override
+  Object get assetSource {
+    final svgData = _extractSvg();
+    return svgData.string ?? svgData.file!;
+  }
+
   ({String? string, File? file}) _extractSvg() => switch (svgLoader) {
     (final SvgStringLoader loader) => (
       string: loader.provideSvg(null),

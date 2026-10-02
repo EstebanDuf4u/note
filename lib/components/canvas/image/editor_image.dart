@@ -15,6 +15,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:saber/components/canvas/_asset_cache.dart';
 import 'package:saber/components/canvas/canvas_image.dart';
 import 'package:saber/components/canvas/invert_widget.dart';
+import 'package:saber/data/editor/ids.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/pages/editor/editor.dart';
@@ -28,6 +29,9 @@ part 'svg_editor_image.dart';
 sealed class EditorImage extends ChangeNotifier {
   /// id for this image, unique within a note
   int id;
+
+  /// Identifies this image across devices when syncing in realtime.
+  String uid = newId();
 
   /// The image's file extension, e.g. [".jpg"].
   /// This is used when "downloading" the image to the user's photo gallery.
@@ -119,8 +123,9 @@ sealed class EditorImage extends ChangeNotifier {
     required AssetCache assetCache,
   }) {
     final extension = json['e'] as String?;
+    final EditorImage image;
     if (extension == '.svg') {
-      return SvgEditorImage.fromJson(
+      image = SvgEditorImage.fromJson(
         json,
         inlineAssets: inlineAssets,
         isThumbnail: isThumbnail,
@@ -128,7 +133,7 @@ sealed class EditorImage extends ChangeNotifier {
         assetCache: assetCache,
       );
     } else if (extension == '.pdf') {
-      return PdfEditorImage.fromJson(
+      image = PdfEditorImage.fromJson(
         json,
         inlineAssets: inlineAssets,
         isThumbnail: isThumbnail,
@@ -136,7 +141,7 @@ sealed class EditorImage extends ChangeNotifier {
         assetCache: assetCache,
       );
     } else {
-      return PngEditorImage.fromJson(
+      image = PngEditorImage.fromJson(
         json,
         inlineAssets: inlineAssets,
         isThumbnail: isThumbnail,
@@ -144,12 +149,16 @@ sealed class EditorImage extends ChangeNotifier {
         assetCache: assetCache,
       );
     }
+    final uid = json['u'];
+    if (uid is String && uid.isNotEmpty) image.uid = uid;
+    return image;
   }
 
   @mustBeOverridden
   @mustCallSuper
   Map<String, dynamic> toJson(OrderedAssetCache assets) => {
     'id': id,
+    'u': uid,
     'e': extension,
     'i': pageIndex,
     'v': invertible,
@@ -208,6 +217,17 @@ sealed class EditorImage extends ChangeNotifier {
 
     _loadedIn = true;
   }
+
+  /// Waits until the first [loadIn] has given this image its size,
+  /// starting it if the image hasn't been shown yet.
+  Future<void> waitForFirstLoad() async {
+    if (_firstLoadCompleter == null) await loadIn();
+    await _firstLoadCompleter!.future;
+  }
+
+  /// The file, bytes or string that this image is drawn from,
+  /// which is saved as one of the note's assets.
+  Object get assetSource;
 
   /// Free up resources when the image is no longer visible.
   ///
