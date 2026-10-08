@@ -419,6 +419,14 @@ class Stows {
   /// to the index of the cover's color. See [NoteLibrary].
   final noteCovers = PlainStow('noteCovers', '{}', volatile: !_isOnMainIsolate);
 
+  /// A json list of the handwriting that the user saved to add to any note.
+  /// See [ElementLibrary].
+  final savedElements = PlainStow(
+    'savedElements',
+    '[]',
+    volatile: !_isOnMainIsolate,
+  );
+
   /// The notes that are open as tabs in the editor. See [OpenTabs].
   final openTabs = PlainStow(
     'openTabs',

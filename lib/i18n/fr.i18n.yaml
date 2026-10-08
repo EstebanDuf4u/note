@@ -297,6 +297,12 @@ profile:
       Si vous utilisez le serveur Saber officiel, votre compte sera supprimé au bout d'une semaine . Durant cette période, vous pourrez me contacter à adilhanney@disroot.org pour annuler la suppression.
       Si vous utilisez un autre serveur, il n'est pas certain que vous puissiez supprimer votre compte dessus : il vous faudra consulter les règles de confidentialité du serveur pour plus d'informations.
   quotaUsageUncapped(OUTDATED): Vous utilisez $used
+elements:
+  title: Éléments
+  save: Enregistrer comme élément
+  saved: Ajouté à vos éléments
+  delete: Supprimer cet élément
+  empty: Sélectionnez de l'écriture au lasso et enregistrez-la comme élément pour l'ajouter à nouveau dans n'importe quelle note.
 sharing:
   title: Partager
   description: Toute personne qui a le lien peut ouvrir cette note et y écrire avec vous, en direct. Il lui faut un compte sur votre serveur.
