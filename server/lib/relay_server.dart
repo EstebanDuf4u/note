@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dart_quill_delta/dart_quill_delta.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:noteplus_server/accounts.dart';
+import 'package:noteplus_server/shares.dart';
 
 int _int(dynamic value) => switch (value) {
   (final int value) => value,
@@ -43,7 +44,8 @@ class RelayServer {
   }) : accounts = AccountStore(
          File('${dataDirectory.path}/accounts.json'),
          passwordIterations: passwordIterations,
-       );
+       ),
+       shares = ShareStore(File('${dataDirectory.path}/shares.json'));
 
   /// Where the accounts and the room logs are stored.
   final Directory dataDirectory;
@@ -52,6 +54,9 @@ class RelayServer {
   final bool allowRegistration;
 
   final AccountStore accounts;
+
+  /// The links with which accounts open each other's notes.
+  final ShareStore shares;
 
   /// How long a note stays in memory after its last device has left.
   final Duration roomIdleTimeout;
@@ -67,6 +72,7 @@ class RelayServer {
   Future<void> start({Object? address, int port = 8787}) async {
     await dataDirectory.create(recursive: true);
     await accounts.load();
+    await shares.load();
     final httpServer = _httpServer = await HttpServer.bind(
       address ?? InternetAddress.anyIPv4,
       port,
@@ -150,13 +156,48 @@ class RelayServer {
         return {};
 
       case ('GET', '/notes'):
-        final notes = await _notesOf(_authenticate(request));
-        return notes.list();
+        final userId = _authenticate(request);
+        final notes = await _notesOf(userId);
+        return {...await notes.list(), 'shared': await _sharedWith(userId)};
 
       case ('POST', '/notes/delete'):
-        final notes = await _notesOf(_authenticate(request));
+        final userId = _authenticate(request);
+        final notes = await _notesOf(userId);
         final body = await _readBody(request);
-        await notes.delete(_string(body, 'path'));
+        final path = _string(body, 'path');
+        await _unshare(userId, path);
+        await notes.delete(path);
+        return {};
+
+      case ('POST', '/notes/share'):
+        final userId = _authenticate(request);
+        final body = await _readBody(request);
+        return {'token': await shares.share(userId, _string(body, 'path'))};
+
+      case ('POST', '/notes/unshare'):
+        final userId = _authenticate(request);
+        final body = await _readBody(request);
+        await _unshare(userId, _string(body, 'path'));
+        return {};
+
+      case ('POST', '/shares/accept'):
+        final userId = _authenticate(request);
+        final token = _string(await _readBody(request), 'token');
+        final share = shares[token];
+        if (share == null) {
+          throw const AccountException('not_found', HttpStatus.notFound);
+        }
+        await shares.accept(userId, token);
+        return {
+          'token': token,
+          'path': share.path,
+          'owner': accounts.nameOf(share.owner),
+          'own': share.owner == userId,
+        };
+
+      case ('POST', '/shares/leave'):
+        final userId = _authenticate(request);
+        await shares.leave(userId, _string(await _readBody(request), 'token'));
         return {};
 
       case ('GET', '/library'):
@@ -174,6 +215,27 @@ class RelayServer {
       default:
         throw const AccountException('not_found', HttpStatus.notFound);
     }
+  }
+
+  /// The notes of other accounts that [userId] opened from a link.
+  Future<List<Map<String, dynamic>>> _sharedWith(String userId) async => [
+    for (final token in shares.acceptedBy(userId))
+      if (shares[token] case final share?)
+        {
+          'token': token,
+          'path': share.path,
+          'owner': accounts.nameOf(share.owner),
+          'head': await (await _notesOf(share.owner)).headOf(share.path),
+        },
+  ];
+
+  /// Stops sharing the note at [path] of [userId], and disconnects the
+  /// other accounts that have it open.
+  Future<void> _unshare(String userId, String path) async {
+    final token = await shares.unshare(userId, path);
+    if (token == null) return;
+    final notes = await _notesOf(userId);
+    notes.disconnectShare(path, token);
   }
 
   static String? _bearerToken(HttpRequest request) {
@@ -241,6 +303,8 @@ class RelayServer {
       switch (message['k']) {
         case 'join':
           await _join(client, message);
+        case 'presence':
+          client.room?.relayPresence(client, message['d']);
         case 'op':
           final room = client.room;
           if (room == null) throw const FormatException('Join a room first');
@@ -267,7 +331,14 @@ class RelayServer {
     if (userId == null) {
       throw const _Refusal('auth', 'Not signed in');
     }
-    final path = message['room'];
+    // A note of another account is opened with the token of its link.
+    final shareToken = message['share'];
+    final share = shareToken is String ? shares[shareToken] : null;
+    if (shareToken is String && share == null) {
+      client.send({'k': 'deleted'});
+      return;
+    }
+    final path = share?.path ?? message['room'];
     final clientId = message['client'];
     if (path is! String || path.isEmpty) {
       throw const FormatException('Missing room');
@@ -279,8 +350,12 @@ class RelayServer {
     client.room?.leave(client);
     client.room = null;
 
-    final notes = await _notesOf(userId);
-    final room = await notes.join(path, create: message['create'] == true);
+    final notes = await _notesOf(share?.owner ?? userId);
+    final room = await notes.join(
+      path,
+      create: share == null && message['create'] == true,
+    );
+    if (share != null) await shares.accept(userId, shareToken as String);
     if (room == null) {
       // The note was deleted on another device.
       client.send({'k': 'deleted'});
@@ -288,6 +363,8 @@ class RelayServer {
     }
     client
       ..id = clientId
+      ..userName = accounts.nameOf(userId) ?? ''
+      ..share = shareToken is String ? shareToken : null
       ..notes = notes
       ..room = room;
 
@@ -473,6 +550,26 @@ class _UserNotes {
     await _saveIndex();
   });
 
+  /// Returns how many operations the note at [path] has.
+  Future<int> headOf(String path) async =>
+      (await _rooms[path])?.head ??
+      (_closedHeads[path] ??= await _Room.countOperations(_logFileFor(path)));
+
+  /// Disconnects the devices that opened the note at [path] with the link
+  /// [token], which no longer gives access to it.
+  void disconnectShare(String path, String token) {
+    final room = _rooms[path];
+    if (room == null) return;
+    room.then((room) {
+      for (final client in room.clients.toList()) {
+        if (client.share != token) continue;
+        client.send({'k': 'deleted'});
+        room.leave(client);
+        client.room = null;
+      }
+    });
+  }
+
   /// Returns the notes of this account for `GET /notes`.
   Future<Map<String, dynamic>> list() => _synchronized(() async {
     final notes = <Map<String, dynamic>>[];
@@ -501,6 +598,13 @@ class _Client {
 
   final WebSocket socket;
   var id = '';
+
+  /// The name of the account that this device is signed in to.
+  var userName = '';
+
+  /// The token of the link that this device opened the note with,
+  /// if it's another account's note.
+  String? share;
   _UserNotes? notes;
   _Room? room;
 
@@ -547,13 +651,33 @@ class _Room {
   /// Called when no device has had this room open for [idleTimeout].
   void Function()? onIdle;
 
+  /// Tells the other devices in the room where [sender]'s user is
+  /// in the note, or that they've left if [presence] is null.
+  /// This isn't kept in the log: it only matters to those here now.
+  void relayPresence(_Client sender, dynamic presence) {
+    if (presence != null && presence is! Map) return;
+    final message = BsonCodec.serialize({
+      'k': 'presence',
+      'from': sender.id,
+      'user': sender.userName,
+      'd': presence,
+    }).byteList;
+    for (final client in clients) {
+      if (client == sender) continue;
+      if (client.socket.readyState != WebSocket.open) continue;
+      client.socket.add(message);
+    }
+  }
+
   /// How many devices are catching up before joining [clients].
   var joining = 0;
 
   bool get isIdle => clients.isEmpty && joining == 0;
 
   void leave(_Client client) {
-    if (!clients.remove(client) || clients.isNotEmpty) return;
+    if (!clients.remove(client)) return;
+    relayPresence(client, null);
+    if (clients.isNotEmpty) return;
     _idleTimer?.cancel();
     _idleTimer = Timer(idleTimeout, () => onIdle?.call());
   }
