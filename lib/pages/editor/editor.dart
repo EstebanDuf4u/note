@@ -408,6 +408,22 @@ class EditorState extends State<Editor> {
     autosaveAfterDelay();
   }
 
+  /// Switches between turning pages one at a time and scrolling through them,
+  /// staying on the same page.
+  void _toggleHorizontalPaging() {
+    final pageIndex = currentPageIndex;
+    setState(() {
+      stows.editorHorizontalPaging.value =
+          !stows.editorHorizontalPaging.value;
+    });
+    CanvasGestureDetector.scrollToPage(
+      pageIndex: pageIndex,
+      pages: coreInfo.pages,
+      screenWidth: MediaQuery.sizeOf(context).width,
+      transformationController: _transformationController,
+    );
+  }
+
   /// Lets the user study this note's pages as flashcards.
   Future<void> _study() async {
     await Navigator.of(context).push(
@@ -492,7 +508,23 @@ class EditorState extends State<Editor> {
       }
     }
 
-    if (removedAPage) {
+    if (removedAPage && CanvasGestureDetector.horizontalPaging) {
+      // turn back to the last page if we were past it
+      final lastIndex = coreInfo.pages.length - 1;
+      final shownIndex = CanvasGestureDetector.horizontalPageIndex(
+        transform: _transformationController.value,
+        screenWidth: MediaQuery.sizeOf(context).width,
+        pageCount: coreInfo.pages.length + 1,
+      );
+      if (shownIndex > lastIndex) {
+        CanvasGestureDetector.scrollToPage(
+          pageIndex: lastIndex,
+          pages: coreInfo.pages,
+          screenWidth: MediaQuery.sizeOf(context).width,
+          transformationController: _transformationController,
+        );
+      }
+    } else if (removedAPage) {
       // scroll to the last page (only if we're below the last page)
 
       final scrollY = this.scrollY;
@@ -1940,11 +1972,13 @@ class EditorState extends State<Editor> {
               transformationController: _transformationController,
               // the page that fills the top of the screen, even
               // when its top edge is just below the toolbar
-              getCurrentPageIndex: () => getPageIndexFromScrollPosition(
-                scrollY: -scrollY + 100,
-                screenWidth: MediaQuery.sizeOf(context).width,
-                pages: coreInfo.pages,
-              ),
+              getCurrentPageIndex: () => CanvasGestureDetector.horizontalPaging
+                  ? currentPageIndex
+                  : getPageIndexFromScrollPosition(
+                      scrollY: -scrollY + 100,
+                      screenWidth: MediaQuery.sizeOf(context).width,
+                      pages: coreInfo.pages,
+                    ),
               onPageTap: (pageIndex) => CanvasGestureDetector.scrollToPage(
                 pageIndex: pageIndex,
                 pages: coreInfo.pages,
@@ -2041,6 +2075,17 @@ class EditorState extends State<Editor> {
                       stows.editorPagePanel.value =
                           !stows.editorPagePanel.value;
                     }),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      CanvasGestureDetector.horizontalPaging
+                          ? Icons.view_carousel
+                          : Icons.view_day,
+                    ),
+                    tooltip: CanvasGestureDetector.horizontalPaging
+                        ? t.editor.scrollContinuously
+                        : t.editor.turnPages,
+                    onPressed: _toggleHorizontalPaging,
                   ),
                   IconButton(
                     icon: const AdaptiveIcon(
@@ -2448,6 +2493,14 @@ class EditorState extends State<Editor> {
     if (!mounted) return _lastCurrentPageIndex;
 
     final screenWidth = MediaQuery.sizeOf(context).width;
+
+    if (CanvasGestureDetector.horizontalPaging) {
+      return _lastCurrentPageIndex = CanvasGestureDetector.horizontalPageIndex(
+        transform: _transformationController.value,
+        screenWidth: screenWidth,
+        pageCount: coreInfo.pages.length,
+      );
+    }
 
     return _lastCurrentPageIndex = getPageIndexFromScrollPosition(
       scrollY: -scrollY,

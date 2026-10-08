@@ -387,6 +387,12 @@ class Translations$editor$en {
 	// Translations
 	late final Translations$editor$flashcards$en flashcards = Translations$editor$flashcards$en.internal(_root);
 
+	/// en: 'Turn pages one at a time'
+	String get turnPages => 'Turn pages one at a time';
+
+	/// en: 'Scroll through the pages'
+	String get scrollContinuously => 'Scroll through the pages';
+
 	/// en: 'Page thumbnails'
 	String get pagePanel => 'Page thumbnails';
 
