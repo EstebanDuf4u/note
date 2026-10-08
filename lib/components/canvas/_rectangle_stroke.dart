@@ -139,6 +139,15 @@ class RectangleStroke extends Stroke {
   }
 
   @override
+  void scale(Offset anchor, double factor) {
+    rect = Rect.fromPoints(
+      anchor + (rect.topLeft - anchor) * factor,
+      anchor + (rect.bottomRight - anchor) * factor,
+    );
+    super.scale(anchor, factor);
+  }
+
+  @override
   @Deprecated('We already know the shape is a rectangle.')
   RecognizedUnistroke detectShape() {
     return RecognizedUnistroke(

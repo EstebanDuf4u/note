@@ -248,6 +248,29 @@ class CanvasPainter extends CustomPainter {
         ..strokeWidth = 3
         ..style = .stroke,
     );
+
+    // the box around what's selected, and the handle that resizes it
+    if (currentSelection!.isEmpty) return;
+    final bounds = currentSelection!.bounds;
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..color = primaryColor.withValues(alpha: 0.6)
+        ..strokeWidth = 1.5
+        ..style = .stroke,
+    );
+    final handle = currentSelection!.resizeHandle;
+    canvas
+      ..drawCircle(handle, 10, Paint()..color = Colors.white)
+      ..drawCircle(
+        handle,
+        10,
+        Paint()
+          ..color = primaryColor
+          ..strokeWidth = 3
+          ..style = .stroke,
+      )
+      ..drawCircle(handle, 4, Paint()..color = primaryColor);
   }
 
   static const double _pageIndicatorFontSize = 20;

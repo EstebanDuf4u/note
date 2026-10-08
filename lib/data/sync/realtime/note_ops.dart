@@ -93,6 +93,7 @@ abstract final class NoteOps {
   static const removeStrokesType = 'rs';
   static const moveStrokesType = 'ms';
   static const colorStrokesType = 'cs';
+  static const scaleStrokesType = 'ss';
   static const insertPageType = 'ip';
   static const deletePageType = 'dp';
   static const movePageType = 'mp';
@@ -123,6 +124,18 @@ abstract final class NoteOps {
     'ids': [for (final stroke in strokes) stroke.id],
     'dx': offset.dx,
     'dy': offset.dy,
+  };
+
+  static NoteOp scaleStrokes(
+    Iterable<Stroke> strokes,
+    Offset anchor,
+    double factor,
+  ) => {
+    't': scaleStrokesType,
+    'ids': [for (final stroke in strokes) stroke.id],
+    'x': anchor.dx,
+    'y': anchor.dy,
+    'f': factor,
   };
 
   static NoteOp colorStrokes(Map<Stroke, Color> colors) => {
@@ -376,6 +389,17 @@ abstract final class NoteOps {
           for (final stroke in added)
             addStroke(_pageOfStroke(stroke, coreInfo).id, stroke),
         ];
+      case .scale:
+        final factor = item.scaleFactor!;
+        return [
+          if (item.strokes.isNotEmpty)
+            scaleStrokes(
+              item.strokes,
+              item.scaleAnchor!,
+              inverse ? 1 / factor : factor,
+            ),
+          for (final image in images) updateImage(image, coreInfo),
+        ];
       case .backgroundPattern:
         final change = item.backgroundPatternChange!;
         return [backgroundPattern(inverse ? change.previous : change.current)];
@@ -538,6 +562,15 @@ class NoteOpApplier {
         );
         for (final String id in (op['ids'] as List).cast()) {
           _findStroke(id).$2?.shift(offset);
+        }
+      case NoteOps.scaleStrokesType:
+        final anchor = Offset(
+          (op['x'] as num).toDouble(),
+          (op['y'] as num).toDouble(),
+        );
+        final factor = (op['f'] as num).toDouble();
+        for (final String id in (op['ids'] as List).cast()) {
+          _findStroke(id).$2?.scale(anchor, factor);
         }
       case NoteOps.colorStrokesType:
         final overridden = <String>{

@@ -154,7 +154,13 @@ class EditorHistoryItem {
     this.colorChange,
     this.backgroundPatternChange,
     this.replacements = const [],
+    this.scaleAnchor,
+    this.scaleFactor,
   }) : assert(
+         type != .scale || (scaleAnchor != null && scaleFactor != null),
+         'Anchor and factor must be provided for scale',
+       ),
+       assert(
          type != .move || offset != null,
          'Offset must be provided for move',
        ),
@@ -197,6 +203,11 @@ class EditorHistoryItem {
   /// the strokes that took the place of [strokes].
   final List<Stroke> replacements;
 
+  /// For [EditorHistoryItemType.scale], the point that stayed in place
+  /// and how much bigger [strokes] and [images] became.
+  final Offset? scaleAnchor;
+  final double? scaleFactor;
+
   EditorHistoryItem copyWith({
     EditorHistoryItemType? type,
     int? pageIndex,
@@ -208,6 +219,7 @@ class EditorHistoryItem {
     Map<Stroke, Change<Color>>? colorChange,
     Change<CanvasBackgroundPattern>? backgroundPatternChange,
     List<Stroke>? replacements,
+    double? scaleFactor,
   }) {
     return EditorHistoryItem(
       type: type ?? this.type,
@@ -221,6 +233,8 @@ class EditorHistoryItem {
       backgroundPatternChange:
           backgroundPatternChange ?? this.backgroundPatternChange,
       replacements: replacements ?? this.replacements,
+      scaleAnchor: scaleAnchor,
+      scaleFactor: scaleFactor ?? this.scaleFactor,
     );
   }
 }
@@ -239,4 +253,7 @@ enum EditorHistoryItemType {
   /// Strokes were replaced by others, e.g. by pieces of them
   /// when part of them was erased.
   split,
+
+  /// Strokes and images were made bigger or smaller.
+  scale,
 }

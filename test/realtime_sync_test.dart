@@ -633,6 +633,34 @@ void main() {
       expect(b.pages[0].strokes.single.id, stroke.id);
     });
 
+    test('strokes are resized', () {
+      final a = _Device('a'), b = _Device('b');
+      final stroke = a.draw(0, at: const Offset(10, 10));
+      b.receive(a.lastOps);
+      final before = b.contents;
+
+      const anchor = Offset(10, 10);
+      stroke.scale(anchor, 2);
+      final item = EditorHistoryItem(
+        type: .scale,
+        pageIndex: 0,
+        strokes: [stroke],
+        images: [],
+        scaleAnchor: anchor,
+        scaleFactor: 2,
+      );
+      b.receive(a.record(item));
+      expect(b.contents, a.contents);
+      expect(b.contents, isNot(before));
+      final bounds = b.pages[0].strokes.single.lowQualityPath.getBounds();
+      expect(bounds.width, greaterThan(35));
+
+      stroke.scale(anchor, 0.5);
+      b.receive(a.record(item, inverse: true));
+      expect(b.contents, a.contents);
+      expect(b.contents, before);
+    });
+
     test('moving a page', () {
       final a = _Device('a'), b = _Device('b');
       a.draw(0);

@@ -59,6 +59,21 @@ class Stroke {
     _highQualityPath = _highQualityPath?.shift(offset);
   }
 
+  /// Scales this stroke by [factor] around [anchor], its width included.
+  void scale(Offset anchor, double factor) {
+    if (factor == 1) return;
+    for (int i = 0; i < points.length; ++i) {
+      final point = points[i];
+      points[i] = PointVector(
+        anchor.dx + (point.x - anchor.dx) * factor,
+        anchor.dy + (point.y - anchor.dy) * factor,
+        point.pressure,
+      );
+    }
+    options.size *= factor;
+    markPolygonNeedsUpdating();
+  }
+
   void markPolygonNeedsUpdating() {
     _lowQualityPolygon = null;
     _highQualityPolygon = null;

@@ -127,6 +127,13 @@ class CircleStroke extends Stroke {
   }
 
   @override
+  void scale(Offset anchor, double factor) {
+    center = anchor + (center - anchor) * factor;
+    radius *= factor;
+    super.scale(anchor, factor);
+  }
+
+  @override
   @Deprecated('We already know the shape is a circle.')
   RecognizedUnistroke detectShape() {
     return RecognizedUnistroke(
