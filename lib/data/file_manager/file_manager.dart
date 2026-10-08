@@ -17,6 +17,7 @@ import 'package:saber/data/nextcloud/saber_syncer.dart';
 import 'package:saber/data/note_library.dart';
 import 'package:saber/data/open_tabs.dart';
 import 'package:saber/data/prefs.dart';
+import 'package:saber/data/sync/realtime/shared_notes.dart';
 import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/editor.dart';
 import 'package:saver_gallery/saver_gallery.dart';
@@ -40,6 +41,10 @@ class FileManager {
   /// Called with the path of a note (without its extension)
   /// when the user deletes it, or moves it to another path.
   static void Function(String notePath)? onNoteRemoved;
+
+  /// Called with the paths of a note (without its extension)
+  /// when the user moves or renames it, before [onNoteRemoved].
+  static void Function(String fromPath, String toPath)? onNoteRenamed;
 
   static void _notifyNoteRemoved(String filePath) {
     for (final extension in const [Editor.extension, Editor.extensionOldJson]) {
@@ -947,6 +952,11 @@ class FileManager {
     if (!assetFileRegex.hasMatch(fromPath)) {
       NoteLibrary.noteRenamed(fromPath, toPath);
       OpenTabs.noteRenamed(fromPath, toPath);
+      SharedNotes.noteRenamed(fromPath, toPath);
+      onNoteRenamed?.call(
+        NoteLibrary.notePath(fromPath),
+        NoteLibrary.notePath(toPath),
+      );
     }
   }
 

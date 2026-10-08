@@ -12,6 +12,7 @@ import 'package:saber/data/prefs.dart';
 import 'package:saber/data/sync/realtime/note_ops.dart';
 import 'package:saber/data/sync/realtime/realtime_account.dart';
 import 'package:saber/data/sync/realtime/realtime_session.dart';
+import 'package:saber/data/sync/realtime/shared_notes.dart';
 import 'package:saber/pages/editor/editor.dart';
 
 enum AccountSyncState {
@@ -62,6 +63,7 @@ class AccountSyncer {
   Future<void> start() async {
     await RealtimeAccount.waitUntilLoaded();
     FileManager.onNoteRemoved = _onNoteRemoved;
+    FileManager.onNoteRenamed = _onNoteRenamed;
     stows.realtimeToken.addListener(syncNow);
     _timer?.cancel();
     _timer = Timer.periodic(pollInterval, (_) => syncNow());
@@ -74,6 +76,9 @@ class AccountSyncer {
     stows.realtimeToken.removeListener(syncNow);
     if (FileManager.onNoteRemoved == _onNoteRemoved) {
       FileManager.onNoteRemoved = null;
+    }
+    if (FileManager.onNoteRenamed == _onNoteRenamed) {
+      FileManager.onNoteRenamed = null;
     }
   }
 
@@ -112,9 +117,31 @@ class AccountSyncer {
     stows.realtimeNoteSeqs.value = jsonEncode(seqs);
   }
 
+  void _onNoteRenamed(String fromPath, String toPath) {
+    if (!RealtimeAccount.isSignedIn) return;
+    // [SharedNotes] already follows a shared note to its new path
+    if (SharedNotes.isShared(toPath)) {
+      final seq = _seqs[fromPath];
+      _setSeq(fromPath, null);
+      _setSeq(toPath, seq);
+      return;
+    }
+    // so that the note's link, if it has one, follows it
+    unawaited(
+      RealtimeAccount.noteRenamed(fromPath, toPath).catchError((Object e) {
+        log.info('Failed to tell the server that $fromPath moved: $e');
+      }),
+    );
+  }
+
   void _onNoteRemoved(String path) {
     if (!RealtimeAccount.isSignedIn) return;
     _setSeq(path, null);
+    // another account's note is only removed from this user's notes
+    if (SharedNotes.leave(path)) {
+      unawaited(syncNow());
+      return;
+    }
     final pending = stows.realtimePendingDeletes.value;
     if (!pending.contains(path)) {
       stows.realtimePendingDeletes.value = [...pending, path];
@@ -179,8 +206,10 @@ class AccountSyncer {
         await _syncNote(path, exists: exists);
       }
 
-      // notes that the account doesn't have yet
+      // notes that the account doesn't have yet,
+      // except other accounts' notes, which are synced with their owner
       for (final path in local) {
+        if (SharedNotes.isShared(path)) continue;
         if (remote.heads.containsKey(path) || remote.deleted.contains(path)) {
           continue;
         }
@@ -190,6 +219,7 @@ class AccountSyncer {
       }
 
       await _syncLibrary();
+      await _syncSharedNotes(remote);
 
       state.value = .upToDate;
     } on RealtimeAccountException catch (e) {
@@ -207,6 +237,60 @@ class AccountSyncer {
     final unsent = NoteLibrary.unsentChanges;
     final remote = await RealtimeAccount.syncLibrary(unsent);
     NoteLibrary.applyRemoteChanges(remote, sent: unsent);
+  }
+
+  /// Brings the notes of other accounts that the user opened from a link
+  /// up to date, and tells the server about those that the user removed.
+  Future<void> _syncSharedNotes(RemoteNotes remote) async {
+    for (final note in SharedNotes.all.values) {
+      if (note.left) {
+        await RealtimeAccount.leaveShare(note.token);
+        SharedNotes.remove(note.token);
+      } else if (!remote.shared.containsKey(note.token)) {
+        // The owner stopped sharing it: the user keeps a copy as their own.
+        log.info('${note.localPath} is no longer shared, keeping a copy');
+        SharedNotes.remove(note.token);
+        _setSeq(note.localPath, null);
+      }
+    }
+
+    for (final MapEntry(key: token, value: shared) in remote.shared.entries) {
+      final note = SharedNotes.add(
+        token: token,
+        owner: shared.owner,
+        ownerPath: shared.path,
+        isTaken: _noteExists,
+      );
+      final path = note.localPath;
+      if (_isOpen(path)) continue;
+      final exists = _noteExists(path);
+      if (exists && (_seqs[path] ?? -1) >= shared.head) continue;
+      state.value = .syncing;
+      await _syncNote(path, exists: exists, share: token);
+    }
+  }
+
+  /// Opens the note shared with the link [link], adding it to the user's
+  /// notes, and returns its path on this device.
+  Future<String> openSharedLink(String link) async {
+    final token = SharedNotes.tokenOfLink(link);
+    if (token == null) {
+      throw const RealtimeAccountException(RealtimeAccountException.notFound);
+    }
+    final shared = await RealtimeAccount.acceptShare(token);
+    // the user's own note, opened from its link
+    if (shared.own) return shared.path;
+
+    final note = SharedNotes.add(
+      token: token,
+      owner: shared.owner,
+      ownerPath: shared.path,
+      isTaken: _noteExists,
+    );
+    if (!_noteExists(note.localPath)) {
+      await _syncNote(note.localPath, exists: false, share: token);
+    }
+    return note.localPath;
   }
 
   /// Tells the server about the notes that were deleted on this device.
@@ -252,6 +336,7 @@ class AccountSyncer {
     String path, {
     required bool exists,
     bool asNewNote = false,
+    String? share,
   }) async {
     if (_isOpen(path)) return;
 
@@ -293,6 +378,7 @@ class AccountSyncer {
         serverUrl: RealtimeAccount.webSocketUrl,
         token: token,
         room: path,
+        share: share,
         clientId: stows.realtimeClientId.value,
         applier: NoteOpApplier(
           coreInfo: coreInfo,

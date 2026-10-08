@@ -42,6 +42,7 @@ class TranslationsFr extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$login$fr login = _Translations$login$fr._(_root);
 	@override late final _Translations$account$fr account = _Translations$account$fr._(_root);
 	@override late final _Translations$profile$fr profile = _Translations$profile$fr._(_root);
+	@override late final _Translations$sharing$fr sharing = _Translations$sharing$fr._(_root);
 	@override late final _Translations$appInfo$fr appInfo = _Translations$appInfo$fr._(_root);
 	@override late final _Translations$update$fr update = _Translations$update$fr._(_root);
 	@override late final _Translations$editor$fr editor = _Translations$editor$fr._(_root);
@@ -217,6 +218,30 @@ class _Translations$profile$fr extends Translations$profile$en {
 		_Translations$profile$faq$3$fr._(_root),
 	];
 	@override String quotaUsageUncapped({required Object used}) => 'Vous utilisez ${used}';
+}
+
+// Path: sharing
+class _Translations$sharing$fr extends Translations$sharing$en {
+	_Translations$sharing$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'Partager';
+	@override String get description => 'Toute personne qui a le lien peut ouvrir cette note et y écrire avec vous, en direct. Il lui faut un compte sur votre serveur.';
+	@override String get createLink => 'Créer un lien';
+	@override String get copy => 'Copier le lien';
+	@override String get copied => 'Lien copié';
+	@override String get stop => 'Arrêter le partage';
+	@override String get close => 'Fermer';
+	@override String sharedBy({required Object owner}) => 'Partagée avec vous par ${owner}';
+	@override String get offline => 'Le serveur est injoignable. Réessayez une fois en ligne.';
+	@override String get failed => 'Une erreur est survenue. Réessayez.';
+	@override String get openLink => 'Ouvrir une note partagée';
+	@override String get linkHint => 'Collez le lien que l\'on vous a donné';
+	@override String get invalidLink => 'Ce lien ne fonctionne pas, ou n\'est plus partagé.';
+	@override String get open => 'Ouvrir';
+	@override String get collaborators => 'Aussi ici';
 }
 
 // Path: appInfo

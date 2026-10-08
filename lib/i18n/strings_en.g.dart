@@ -44,6 +44,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$login$en login = Translations$login$en.internal(_root);
 	late final Translations$account$en account = Translations$account$en.internal(_root);
 	late final Translations$profile$en profile = Translations$profile$en.internal(_root);
+	late final Translations$sharing$en sharing = Translations$sharing$en.internal(_root);
 	late final Translations$appInfo$en appInfo = Translations$appInfo$en.internal(_root);
 	late final Translations$update$en update = Translations$update$en.internal(_root);
 	late final Translations$editor$en editor = Translations$editor$en.internal(_root);
@@ -331,6 +332,60 @@ class Translations$profile$en {
 		Translations$profile$faq$2$en.internal(_root),
 		Translations$profile$faq$3$en.internal(_root),
 	];
+}
+
+// Path: sharing
+class Translations$sharing$en {
+	Translations$sharing$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Share'
+	String get title => 'Share';
+
+	/// en: 'Anyone with the link can open this note and write in it with you, as it happens. They need an account on your server.'
+	String get description => 'Anyone with the link can open this note and write in it with you, as it happens. They need an account on your server.';
+
+	/// en: 'Create a link'
+	String get createLink => 'Create a link';
+
+	/// en: 'Copy the link'
+	String get copy => 'Copy the link';
+
+	/// en: 'Link copied'
+	String get copied => 'Link copied';
+
+	/// en: 'Stop sharing'
+	String get stop => 'Stop sharing';
+
+	/// en: 'Close'
+	String get close => 'Close';
+
+	/// en: 'Shared with you by $owner'
+	String sharedBy({required Object owner}) => 'Shared with you by ${owner}';
+
+	/// en: 'The server can't be reached. Try again once you're online.'
+	String get offline => 'The server can\'t be reached. Try again once you\'re online.';
+
+	/// en: 'Something went wrong. Try again.'
+	String get failed => 'Something went wrong. Try again.';
+
+	/// en: 'Open a shared note'
+	String get openLink => 'Open a shared note';
+
+	/// en: 'Paste the link you were given'
+	String get linkHint => 'Paste the link you were given';
+
+	/// en: 'This link doesn't work, or isn't shared anymore.'
+	String get invalidLink => 'This link doesn\'t work, or isn\'t shared anymore.';
+
+	/// en: 'Open'
+	String get open => 'Open';
+
+	/// en: 'Also here'
+	String get collaborators => 'Also here';
 }
 
 // Path: appInfo

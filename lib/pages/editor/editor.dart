@@ -21,8 +21,10 @@ import 'package:saber/components/canvas/canvas.dart';
 import 'package:saber/components/canvas/canvas_gesture_detector.dart';
 import 'package:saber/components/canvas/canvas_image.dart';
 import 'package:saber/components/canvas/image/editor_image.dart';
+import 'package:saber/components/canvas/remote_cursors.dart';
 import 'package:saber/components/canvas/save_indicator.dart';
 import 'package:saber/components/editor/read_only_banner.dart';
+import 'package:saber/components/sharing/share_dialog.dart';
 import 'package:saber/components/theming/adaptive_alert_dialog.dart';
 import 'package:saber/components/theming/adaptive_icon.dart';
 import 'package:saber/components/theming/dynamic_material_app.dart';
@@ -48,6 +50,7 @@ import 'package:saber/data/sync/realtime/account_syncer.dart';
 import 'package:saber/data/sync/realtime/note_ops.dart';
 import 'package:saber/data/sync/realtime/realtime_account.dart';
 import 'package:saber/data/sync/realtime/realtime_session.dart';
+import 'package:saber/data/sync/realtime/shared_notes.dart';
 import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/eraser.dart';
 import 'package:saber/data/tools/highlighter.dart';
@@ -309,10 +312,13 @@ class EditorState extends State<Editor> {
     if (!RealtimeAccount.isSignedIn || coreInfo.readOnly) return;
 
     final token = stows.realtimeToken.value;
+    _presences.value = {};
     _realtime = RealtimeSession(
       serverUrl: RealtimeAccount.webSocketUrl,
       token: token,
       room: coreInfo.filePath,
+      share: SharedNotes.tokenAt(coreInfo.filePath),
+      onPresence: _onPresence,
       clientId: stows.realtimeClientId.value,
       applier: NoteOpApplier(
         coreInfo: coreInfo,
@@ -340,6 +346,61 @@ class EditorState extends State<Editor> {
       },
     )..start();
     setState(() {});
+  }
+
+  /// Where the other people who have this note open are, by their device.
+  final _presences = ValueNotifier(<String, _Presence>{});
+  Timer? _presenceCleanupTimer;
+
+  void _onPresence(String from, String user, Map<String, dynamic>? presence) {
+    if (!mounted) return;
+    final presences = {..._presences.value};
+    if (presence == null) {
+      presences.remove(from);
+    } else {
+      presences[from] = (
+        user: user,
+        pageId: presence['pg'] as String? ?? '',
+        position: Offset(
+          (presence['x'] as num? ?? 0).toDouble(),
+          (presence['y'] as num? ?? 0).toDouble(),
+        ),
+        down: presence['down'] == true,
+        seen: DateTime.now(),
+      );
+    }
+    _presences.value = presences;
+
+    // someone who stops moving fades away after a while
+    _presenceCleanupTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      final now = DateTime.now();
+      final remaining = {
+        for (final MapEntry(:key, :value) in _presences.value.entries)
+          if (now.difference(value.seen) < const Duration(seconds: 6))
+            key: value,
+      };
+      if (remaining.length != _presences.value.length) {
+        _presences.value = remaining;
+      }
+    });
+  }
+
+  var _lastPresenceSent = DateTime(0);
+
+  /// Tells the other people who have the note open where this user's pen is.
+  void _sendPresence(int pageIndex, Offset position, {required bool down}) {
+    final realtime = _realtime;
+    if (realtime == null || pageIndex >= coreInfo.pages.length) return;
+    final now = DateTime.now();
+    // a few times a second is enough to follow along
+    if (down && now.difference(_lastPresenceSent).inMilliseconds < 60) return;
+    _lastPresenceSent = now;
+    realtime.sendPresence({
+      'pg': coreInfo.pages[pageIndex].id,
+      'x': position.dx,
+      'y': position.dy,
+      'down': down,
+    });
   }
 
   /// Sends [item] (or the undoing of [item] if [inverse])
@@ -885,6 +946,7 @@ class EditorState extends State<Editor> {
 
     previousPosition = position;
     moveOffset = .zero;
+    _sendPresence(dragPageIndex!, position, down: true);
 
     if (currentTool is! Select) {
       Select.currentSelect.unselect();
@@ -947,10 +1009,12 @@ class EditorState extends State<Editor> {
     }
     previousPosition = position;
     moveOffset += offset;
+    _sendPresence(dragPageIndex!, position, down: true);
   }
 
   void onDrawEnd(ScaleEndDetails details) {
     final page = coreInfo.pages[dragPageIndex!];
+    _sendPresence(dragPageIndex!, previousPosition, down: false);
     bool shouldSave = true;
     setState(() {
       if (currentTool is Pen) {
@@ -2096,6 +2160,18 @@ class EditorState extends State<Editor> {
                         ),
                       ),
                     ),
+                  ValueListenableBuilder(
+                    valueListenable: _presences,
+                    builder: (context, presences, _) =>
+                        _Collaborators(presences: presences),
+                  ),
+                  if (_realtime != null)
+                    IconButton(
+                      icon: const Icon(Icons.person_add_alt_1),
+                      tooltip: t.sharing.title,
+                      onPressed: () =>
+                          ShareDialog.show(context, coreInfo.filePath),
+                    ),
                   if (coreInfo.flashcards)
                     IconButton(
                       icon: const Icon(Icons.style),
@@ -2337,6 +2413,31 @@ class EditorState extends State<Editor> {
       },
       currentTool: currentTool,
       currentScale: _transformationController.value.approxScale,
+      overlay: ValueListenableBuilder(
+        valueListenable: _presences,
+        builder: (context, presences, _) => RemoteCursors(
+          // how big the page is on screen, zoom and fitting included
+          scale: switch (page.renderBox) {
+            final box? when box.attached =>
+              (box.localToGlobal(const Offset(100, 0)) -
+                          box.localToGlobal(Offset.zero))
+                      .distance /
+                  100,
+            _ => _transformationController.value.approxScale,
+          },
+          cursors: [
+            for (final MapEntry(key: from, value: presence)
+                in presences.entries)
+              if (presence.pageId == page.id)
+                RemoteCursor(
+                  user: presence.user,
+                  position: presence.position,
+                  color: RemoteCursor.colorOf(from),
+                  down: presence.down,
+                ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2580,7 +2681,9 @@ class EditorState extends State<Editor> {
     _lastSeenPointerCountTimer?.cancel();
     _noteTextChanges();
     _syncedPathWhenClosed = _realtime?.room;
+    _realtime?.sendPresence(null);
     _realtime?.dispose();
+    _presenceCleanupTimer?.cancel();
 
     _removeKeybindings();
 
@@ -2616,5 +2719,63 @@ class EditorState extends State<Editor> {
       }
       coreInfo.dispose();
     }
+  }
+}
+
+/// Where another person who has the note open was last seen.
+typedef _Presence = ({
+  String user,
+  String pageId,
+  Offset position,
+  bool down,
+  DateTime seen,
+});
+
+/// The people who have the note open on other devices, as small avatars.
+class _Collaborators extends StatelessWidget {
+  const new({required this.presences});
+
+  final Map<String, _Presence> presences;
+
+  @override
+  Widget build(BuildContext context) {
+    final users = <String, Color>{};
+    for (final MapEntry(key: from, value: presence) in presences.entries) {
+      users.putIfAbsent(presence.user, () => RemoteCursor.colorOf(from));
+    }
+    if (users.isEmpty) return const SizedBox.shrink();
+    return Tooltip(
+      message: '${t.sharing.collaborators} : ${users.keys.join(', ')}',
+      child: Padding(
+        padding: const .symmetric(horizontal: 4),
+        child: Row(
+          mainAxisSize: .min,
+          children: [
+            for (final MapEntry(key: user, value: color) in users.entries.take(
+              4,
+            ))
+              Align(
+                widthFactor: 0.75,
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: Colors.white,
+                  child: CircleAvatar(
+                    radius: 12,
+                    backgroundColor: color,
+                    child: Text(
+                      user.isEmpty ? '?' : user.characters.first.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: .w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

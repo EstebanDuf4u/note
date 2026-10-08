@@ -110,6 +110,14 @@ class Stows {
     volatile: !_isOnMainIsolate,
   );
 
+  /// A json map of the notes of other accounts that the user opened from
+  /// their links, by the links' tokens. See [SharedNotes].
+  final sharedNotes = PlainStow(
+    'sharedNotes',
+    '{}',
+    volatile: !_isOnMainIsolate,
+  );
+
   /// A json map from the path of each note to the sequence number of the
   /// last realtime operation that its file is known to include.
   final realtimeNoteSeqs = PlainStow(
