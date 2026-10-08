@@ -122,7 +122,7 @@ void main() {
 
     test('leaves strokes that it does not touch', () {
       final eraser = Eraser(size: 10, partial: true);
-      final strokes = [line(const Offset(0, 0), const Offset(100, 0))];
+      final strokes = [line(Offset.zero, const Offset(100, 0))];
       expect(eraser.erase(const Offset(50, 30), strokes), isFalse);
       expect(strokes, hasLength(1));
       expect(eraser.onDragEnd().erased, isEmpty);
@@ -130,7 +130,7 @@ void main() {
 
     test('erases the end of a stroke without leaving a dot', () {
       final eraser = Eraser(size: 10, partial: true);
-      final stroke = line(const Offset(0, 0), const Offset(100, 0));
+      final stroke = line(Offset.zero, const Offset(100, 0));
       final strokes = [stroke];
       eraser.erase(const Offset(100, 0), strokes);
       expect(strokes, hasLength(1));
