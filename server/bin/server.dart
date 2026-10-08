@@ -19,6 +19,12 @@ Future<void> main(List<String> arguments) async {
           'Whether new accounts can be created. '
           'Turn it off once everyone has their account.',
     )
+    ..addOption(
+      'web',
+      help:
+          'The directory of the web editor. '
+          'Defaults to the `web` directory next to this program.',
+    )
     ..addFlag('help', abbr: 'h', negatable: false);
 
   final ArgResults args;
@@ -35,7 +41,9 @@ Future<void> main(List<String> arguments) async {
   }
 
   // the web editor is next to this script, in `server/web`
-  final webDirectory = Directory.fromUri(Platform.script.resolve('../web'));
+  final webDirectory = args.option('web') != null
+      ? Directory(args.option('web')!)
+      : Directory.fromUri(Platform.script.resolve('../web'));
   final server = RelayServer(
     dataDirectory: Directory(args.option('data')!),
     allowRegistration: args.flag('registration'),

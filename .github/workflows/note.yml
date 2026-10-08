@@ -1,0 +1,138 @@
+# Tests Note+, then deploys its server (with the web editor) to the OVH
+# server at https://note.noryx.fr on every push to main.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   DEPLOY_HOST         the server, e.g. 164.132.192.219
+#   DEPLOY_USER         the user that deploys, e.g. deploy
+#   DEPLOY_SSH_KEY      that user's private ssh key
+#   DEPLOY_KNOWN_HOSTS  the server's lines of `ssh-keyscan <host>`
+name: note
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: note-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DART_VERSION: 3.13.3
+  FLUTTER_VERSION: 3.47.4
+
+jobs:
+  server:
+    name: Server and web editor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: dart pub get
+      - run: dart analyze
+      - run: dart test
+      - name: Check the web editor's scripts
+        run: for f in web/js/*.js; do node --check "$f"; done
+
+  app:
+    name: App sync tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze lib
+      - name: Sync, library and web interop tests
+        run: >-
+          flutter test
+          test/realtime_sync_test.dart
+          test/web_interop_test.dart
+          test/note_library_test.dart
+          test/open_tabs_test.dart
+          test/tools_eraser_test.dart
+          test/element_library_test.dart
+
+  build:
+    name: Build the server
+    needs: [server]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_VERSION }}
+      - name: Compile
+        working-directory: server
+        run: |
+          dart pub get
+          mkdir -p ../release/bin
+          dart compile exe bin/server.dart -o ../release/bin/note-server
+          cp -r web ../release/web
+      - name: Package
+        run: tar -czf "note-$GITHUB_SHA.tar.gz" -C release .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: note-server
+          path: note-${{ github.sha }}.tar.gz
+          retention-days: 14
+
+  deploy:
+    name: Deploy to note.noryx.fr
+    needs: [server, app, build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://note.noryx.fr
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: note-server
+      - name: Set up ssh
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Upload and install
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          ssh_opts="-i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          scp $ssh_opts "note-$GITHUB_SHA.tar.gz" "$TARGET:/tmp/note-$GITHUB_SHA.tar.gz"
+          ssh $ssh_opts "$TARGET" "sudo /opt/note/deploy.sh /tmp/note-$GITHUB_SHA.tar.gz $GITHUB_SHA"
+      - name: Check the public address
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS -H 'Accept: application/json' https://note.noryx.fr/ | grep -q noteplus; then
+              echo "https://note.noryx.fr answers"; exit 0
+            fi
+            sleep 3
+          done
+          # the server answered on the machine itself (deploy.sh checks it),
+          # so this is about dns, nginx or the certificate
+          echo "::warning::https://note.noryx.fr doesn't answer yet (DNS record, nginx or certificate)"
+
