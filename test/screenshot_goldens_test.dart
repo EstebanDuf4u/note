@@ -7,6 +7,7 @@ import 'package:golden_screenshot/golden_screenshot.dart';
 import 'package:saber/components/canvas/pencil_shader.dart';
 import 'package:saber/components/home/syncing_button.dart';
 import 'package:saber/components/settings/nextcloud_profile.dart';
+import 'package:saber/components/theming/dynamic_material_app.dart';
 import 'package:saber/components/theming/saber_theme.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/flavor_config.dart';
@@ -17,7 +18,6 @@ import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/editor.dart';
 import 'package:saber/pages/home/home.dart';
 import 'package:saber/pages/user/login.dart';
-import 'package:yaru/yaru.dart';
 
 import 'utils/test_mock_channel_handlers.dart';
 import 'utils/test_user.dart';
@@ -77,7 +77,7 @@ void main() {
       await setupDemoFiles();
     });
 
-    const seedColor = YaruColors.blue;
+    const seedColor = DynamicMaterialApp.brandColor;
     final materialTheme = SaberTheme.createThemeFromSeed(
       seedColor,
       .light,
@@ -184,7 +184,7 @@ void _screenshot({
           theme: theme,
           device: device,
           frameColors: frameColors,
-          title: 'Saber',
+          title: 'Note+',
           home: TranslationProvider(child: child),
         );
         await tester.pumpWidget(widget);

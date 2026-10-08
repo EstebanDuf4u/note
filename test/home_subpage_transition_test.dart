@@ -31,7 +31,7 @@ void main() {
         addTearDown(router.dispose);
         await tester.pumpWidget(
           MaterialApp.router(
-            title: 'Saber',
+            title: 'Note+',
             routeInformationProvider: router.routeInformationProvider,
             routeInformationParser: router.routeInformationParser,
             routerDelegate: router.routerDelegate,
@@ -43,7 +43,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 150));
 
         expect(
-          [find.text('Welcome to Saber'), find.text('Logged out')],
+          [find.text('Welcome to Note+'), find.text('Logged out')],
           [findsOneWidget, findsOneWidget],
         );
       });

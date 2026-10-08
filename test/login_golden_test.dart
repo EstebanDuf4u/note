@@ -76,7 +76,7 @@ class _LoginApp extends StatelessWidget {
     return ScreenshotApp.withConditionalTitlebar(
       theme: _theme,
       device: _device,
-      title: 'Saber',
+      title: 'Note+',
       home: NcLoginPage(forceAppBarLeading: true, forceCurrentStep: step),
     );
   }

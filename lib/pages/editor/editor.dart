@@ -350,6 +350,22 @@ class EditorState extends State<Editor> {
     setState(() {});
   }
 
+  /// How big [page] is on screen, zoom and fitting to the screen included.
+  double _onScreenScaleOf(EditorPage page) {
+    final fallback = _transformationController.value.approxScale;
+    final box = page.renderBox;
+    if (box == null || !box.attached || !box.hasSize) return fallback;
+    try {
+      return (box.localToGlobal(const Offset(100, 0)) -
+                  box.localToGlobal(Offset.zero))
+              .distance /
+          100;
+    } catch (e) {
+      // the page is being laid out again
+      return fallback;
+    }
+  }
+
   /// Where the other people who have this note open are, by their device.
   final _presences = ValueNotifier(<String, _Presence>{});
   Timer? _presenceCleanupTimer;
@@ -2558,15 +2574,7 @@ class EditorState extends State<Editor> {
       overlay: ValueListenableBuilder(
         valueListenable: _presences,
         builder: (context, presences, _) => RemoteCursors(
-          // how big the page is on screen, zoom and fitting included
-          scale: switch (page.renderBox) {
-            final box? when box.attached =>
-              (box.localToGlobal(const Offset(100, 0)) -
-                          box.localToGlobal(Offset.zero))
-                      .distance /
-                  100,
-            _ => _transformationController.value.approxScale,
-          },
+          scale: presences.isEmpty ? 1 : _onScreenScaleOf(page),
           cursors: [
             for (final MapEntry(key: from, value: presence)
                 in presences.entries)

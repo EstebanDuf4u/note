@@ -111,8 +111,10 @@ void main() {
   });
 
   test('Test that changelog has been translated', () {
+    // Note+ has store texts in the languages that have a metadata folder
     for (final localeCode in localeNames.keys) {
       if (localeCode == 'en') continue;
+      if (!Directory('metadata/$localeCode').existsSync()) continue;
 
       final file = File('metadata/$localeCode/changelogs/$buildNumber.txt');
       expect(

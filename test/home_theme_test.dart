@@ -22,7 +22,7 @@ void main() {
           await tester.pumpWidget(
             ScreenshotApp.withConditionalTitlebar(
               device: GoldenScreenshotDevices.androidPhone.device,
-              title: 'Saber',
+              title: 'Note+',
               theme: theme,
               home: Theme(
                 data: theme,
