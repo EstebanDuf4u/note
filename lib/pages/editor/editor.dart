@@ -504,6 +504,55 @@ class EditorState extends State<Editor> {
     );
   }
 
+  /// Bookmarks the page at [pageIndex] under [title],
+  /// or removes its bookmark if [title] is null.
+  void _setBookmark(int pageIndex, String? title) {
+    if (coreInfo.readOnly || pageIndex >= coreInfo.pages.length) return;
+    final page = coreInfo.pages[pageIndex];
+    if (page.bookmark == title) return;
+    setState(() => page.bookmark = title);
+    createPage(pageIndex);
+    _submitOps([NoteOps.bookmark(page)]);
+    _saveChangeOutsideHistory();
+  }
+
+  /// Lets the user rename or remove the bookmark of the page at [pageIndex].
+  Future<void> _editBookmark(int pageIndex) async {
+    final page = coreInfo.pages[pageIndex];
+    final controller = TextEditingController(text: page.bookmark ?? '');
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.bookmark),
+        title: Text(t.editor.bookmarks.edit),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: t.editor.bookmarks.title,
+            hintText: t.editor.bookmarks.page(n: pageIndex + 1),
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (text) => Navigator.pop(context, text.trim()),
+        ),
+        actions: [
+          TextButton(
+            // a value that can't be a title, to tell it apart from cancelling
+            onPressed: () => Navigator.pop(context, '\u0000'),
+            child: Text(t.editor.bookmarks.remove),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(MaterialLocalizations.of(context).okButtonLabel),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+    _setBookmark(pageIndex, result == '\u0000' ? null : result);
+  }
+
   /// Lets the user study this note's pages as flashcards.
   Future<void> _study() async {
     await Navigator.of(context).push(
@@ -2068,6 +2117,7 @@ class EditorState extends State<Editor> {
             bottom: 0,
             child: EditorPagePanel(
               coreInfo: coreInfo,
+              onEditBookmark: _editBookmark,
               transformationController: _transformationController,
               // the page that fills the top of the screen, even
               // when its top edge is just below the toolbar
@@ -2171,6 +2221,26 @@ class EditorState extends State<Editor> {
                       tooltip: t.sharing.title,
                       onPressed: () =>
                           ShareDialog.show(context, coreInfo.filePath),
+                    ),
+                  if (!coreInfo.readOnly)
+                    Builder(
+                      builder: (context) {
+                        final pageIndex = currentPageIndex;
+                        final bookmarked =
+                            pageIndex < coreInfo.pages.length &&
+                            coreInfo.pages[pageIndex].bookmark != null;
+                        return IconButton(
+                          icon: Icon(
+                            bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                          ),
+                          tooltip: bookmarked
+                              ? t.editor.bookmarks.edit
+                              : t.editor.bookmarks.add,
+                          onPressed: () => bookmarked
+                              ? _editBookmark(pageIndex)
+                              : _setBookmark(pageIndex, ''),
+                        );
+                      },
                     ),
                   if (coreInfo.flashcards)
                     IconButton(

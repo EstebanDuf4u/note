@@ -352,6 +352,14 @@ editor:
   turnPages: Turn pages one at a time
   scrollContinuously: Scroll through the pages
   closeTab: Close tab
+  bookmarks:
+    contents: Contents
+    add: Bookmark this page
+    remove: Remove the bookmark
+    edit: Rename the bookmark
+    title: Bookmark title
+    page: Page $n
+    empty: No bookmarks yet. Bookmark a page with the ribbon at the top to list it here.
   pagePanel: Page thumbnails
   realtime:
     offline: Realtime sync is offline. Your changes will be sent when it reconnects.

@@ -352,6 +352,14 @@ editor:
   turnPages: Tourner les pages une à une
   scrollContinuously: Faire défiler les pages
   closeTab: Fermer l'onglet
+  bookmarks:
+    contents: Sommaire
+    add: Ajouter un signet à cette page
+    remove: Retirer le signet
+    edit: Renommer le signet
+    title: Titre du signet
+    page: Page $n
+    empty: Aucun signet pour l'instant. Ajoutez-en un avec le ruban en haut pour retrouver la page ici.
   pagePanel: Miniatures des pages
   realtime:
     offline: Synchro temps réel hors ligne. Vos modifications seront envoyées à la reconnexion.

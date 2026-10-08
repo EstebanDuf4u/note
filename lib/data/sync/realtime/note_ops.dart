@@ -106,6 +106,7 @@ abstract final class NoteOps {
   static const textDeltaType = 'qd';
   static const flashcardsType = 'fl';
   static const studyType = 'fc';
+  static const bookmarkType = 'bm';
 
   static NoteOp addStroke(String pageId, Stroke stroke) => {
     't': addStrokeType,
@@ -292,6 +293,13 @@ abstract final class NoteOps {
     'c': page.study?.toJson(),
   };
 
+  /// Describes whether [page] is bookmarked, and under which title.
+  static NoteOp bookmark(EditorPage page) => {
+    't': bookmarkType,
+    'pg': page.id,
+    'b': page.bookmark,
+  };
+
   static Iterable<EditorImage> _imagesOf(EditorCoreInfo coreInfo) sync* {
     for (final page in coreInfo.pages) {
       if (page.backgroundImage case final image?) yield image;
@@ -352,6 +360,7 @@ abstract final class NoteOps {
             ...addImage(image, page, coreInfo, sentAssets: sentAssets),
         if (!page.quill.controller.document.isEmpty()) text(page),
         if (page.study != null) study(page),
+        if (page.bookmark != null) bookmark(page),
       ];
     }
 
@@ -467,6 +476,7 @@ abstract final class NoteOps {
       }
       if (!page.quill.controller.document.isEmpty()) ops.add(text(page));
       if (page.study != null) ops.add(study(page));
+      if (page.bookmark != null) ops.add(bookmark(page));
       previousPageId = page.id;
     }
     return ops;
@@ -648,6 +658,16 @@ class NoteOpApplier {
         coreInfo.pages[index].study = op['c'] != null
             ? StudyState.fromJson(op['c'] as Map)
             : null;
+      case NoteOps.bookmarkType:
+        final pageId = op['pg'] as String;
+        final overridden = pendingLocalOps.any(
+          (pending) =>
+              pending['t'] == NoteOps.bookmarkType && pending['pg'] == pageId,
+        );
+        if (overridden) return;
+        final index = _indexOfPage(pageId);
+        if (index < 0) return;
+        coreInfo.pages[index].bookmark = op['b'] as String?;
       case NoteOps.textDeltaType:
         // [RealtimeSession] merges these with the local changes first
         applyTextChange(op['pg'] as String, Delta.fromJson(op['d'] as List));
