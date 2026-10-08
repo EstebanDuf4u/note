@@ -1,7 +1,7 @@
 // The editor: a note's pages, drawn on a canvas, with the tools to write.
 
 import { Api } from './api.js';
-import { deserialize, serialize } from './bson.js';
+import { deserialize, int, serialize } from './bson.js';
 import {
   boundsOfAll,
   erasedAround,
@@ -19,9 +19,11 @@ import { boundsOf, cssColor, drawImage, drawPage, drawStroke, smoothPath, stroke
 import { Session } from './session.js';
 import { base64Url, sha256 } from './sha256.js';
 import { study } from './study.js';
+import { compose, Elements, exportPdf, plainText, textChange } from './extras.js';
 import { colorOf, confirm, h, icon, initials, prompt, sheet, toast } from './ui.js';
 
 const GAP = 36; // between pages, in page units
+const PAGED_GAP = 120; // between pages side by side
 const MAX_CACHE_PIXELS = 2_800_000; // per page, to stay within iOS's canvas memory
 const HANDLE_RADIUS = 22; // in screen pixels
 
@@ -154,6 +156,7 @@ export class Editor {
     this.loaded = false;
 
     this.tool = load('tool', 'fountainPen');
+    this.paged = load('paged', false);
     this.penSettings = load('pens', {});
     this.eraser = load('eraser', { partial: true, size: 12 });
     this.penSeen = load('penSeen', false);
@@ -689,41 +692,114 @@ export class Editor {
   }
 
   get fitZoom() {
-    return Math.min((this.width - 16) / 1000, 1.25);
+    const width = Math.min((this.width - 16) / 1000, 1.25);
+    if (!this.paged) return width;
+    // the whole page fits between the header and the tools
+    return Math.min(width, (this.height - this.headerHeight - 110) / 1400);
   }
 
   fitWidth() {
+    const index = this.currentPageIndex ?? 0;
     const z = this.fitZoom;
     this.camera.z = z;
     this.camera.x = (1000 - this.width / z) / 2;
     this.camera.y = -(this.headerHeight + 12) / z;
+    if (this.paged) this.camera.x = this.pagedCameraX(index, z);
     this.clampCamera();
     this.requestFrame();
   }
 
-  /** The top of each page, in page units. */
+  /**
+   * When the pages are side by side and the page isn't zoomed in, moves to the
+   * page that's mostly shown, or the next or previous one after a quick swipe
+   * (`velocity` in pixels per millisecond). Returns whether it did.
+   */
+  snapToPage(velocity) {
+    if (this.camera.z > this.fitZoom * 1.05) return false;
+    const slot = 1000 + PAGED_GAP;
+    const position = (this.camera.x + this.width / this.camera.z / 2 - 500) / slot;
+    let index = Math.round(position);
+    if (velocity < -0.3) index = Math.floor(position) + 1;
+    else if (velocity > 0.3) index = Math.ceil(position) - 1;
+    index = Math.max(0, Math.min(this.note.pages.length - 1, index));
+    const from = { x: this.camera.x, y: this.camera.y };
+    const to = { x: this.pagedCameraX(index), y: -(this.headerHeight + 12) / this.camera.z };
+    const start = performance.now();
+    cancelAnimationFrame(this.inertia);
+    const step = () => {
+      const t = Math.min(1, (performance.now() - start) / 260);
+      const eased = 1 - (1 - t) ** 3;
+      this.camera.x = from.x + (to.x - from.x) * eased;
+      this.camera.y = from.y + (to.y - from.y) * eased;
+      this.requestFrame();
+      if (t < 1) this.inertia = requestAnimationFrame(step);
+    };
+    this.inertia = requestAnimationFrame(step);
+    return true;
+  }
+
+  togglePaged() {
+    const index = this.currentPageIndex;
+    this.paged = !this.paged;
+    save('paged', this.paged);
+    this.caches.clear();
+    this.layout();
+    this.fitWidth();
+    this.scrollToPage(index);
+    toast(this.paged ? 'Glissez pour tourner les pages' : 'Faites défiler les pages');
+  }
+
+  /** The camera's x that centers page `index` when the pages are side by side. */
+  pagedCameraX(index, z = this.camera.z) {
+    this.layout();
+    const [ox] = this.origins[index] ?? [0, 0];
+    return ox - (this.width / z - 1000) / 2;
+  }
+
+  /**
+   * Where each page is, in page units: one below the other,
+   * or side by side when they're turned one at a time.
+   */
   layout() {
     const tops = [];
+    const origins = [];
     let y = 0;
-    for (const page of this.note.pages) {
-      tops.push(y);
-      y += page.height + GAP;
-    }
+    this.note.pages.forEach((page, i) => {
+      if (this.paged) {
+        origins.push([i * (1000 + PAGED_GAP), 0]);
+        tops.push(0);
+      } else {
+        origins.push([0, y]);
+        tops.push(y);
+        y += page.height + GAP;
+      }
+    });
     this.pageTops = tops;
-    this.contentHeight = y;
+    this.origins = origins;
+    this.contentHeight = this.paged ? 1400 : y;
     return tops;
+  }
+
+  pageOrigin(page) {
+    if (!this.origins) this.layout();
+    return this.origins[this.note.pages.indexOf(page)] ?? [0, 0];
   }
 
   clampCamera() {
     const { z } = this.camera;
     const viewWidth = this.width / z;
     const viewHeight = this.height / z;
-    if (viewWidth >= 1000) {
+    this.layout();
+    if (this.paged) {
+      const last = this.origins.length - 1;
+      const min = this.pagedCameraX(0, z) - (viewWidth >= 1000 ? 0 : 20);
+      const max = this.pagedCameraX(last, z) + (viewWidth >= 1000 ? 0 : 20);
+      this.camera.x = Math.max(Math.min(min, max), Math.min(Math.max(min, max), this.camera.x));
+    } else if (viewWidth >= 1000) {
       this.camera.x = (1000 - viewWidth) / 2;
     } else {
       this.camera.x = Math.max(-20, Math.min(1000 + 20 - viewWidth, this.camera.x));
     }
-    this.layout();
     const top = -(this.headerHeight + 12) / z;
     const bottom = this.contentHeight - viewHeight + 120 / z;
     this.camera.y = Math.max(top, Math.min(Math.max(top, bottom), this.camera.y));
@@ -741,9 +817,11 @@ export class Editor {
     for (let i = 0; i < this.note.pages.length; i++) {
       const page = this.note.pages[i];
       const top = tops[i];
-      if (wy >= top && wy <= top + page.height && wx >= 0 && wx <= page.width) {
-        return { page, index: i, x: wx, y: wy - top };
+      const left = this.origins[i][0];
+      if (wy >= top && wy <= top + page.height && wx >= left && wx <= left + page.width) {
+        return { page, index: i, x: wx - left, y: wy - top };
       }
+      if (this.paged) continue;
       if (nearest) {
         const distance = Math.abs(wy - Math.min(Math.max(wy, top), top + page.height));
         if (!best || distance < best.distance) {
@@ -761,8 +839,12 @@ export class Editor {
 
   /** The index of the page in the middle of the screen. */
   get currentPageIndex() {
-    const [, wy] = this.toWorld(this.width / 2, this.height / 2);
+    const [wx, wy] = this.toWorld(this.width / 2, this.height / 2);
     const tops = this.pageTops ?? this.layout();
+    if (this.paged) {
+      const index = Math.round((wx - 500) / (1000 + PAGED_GAP));
+      return Math.max(0, Math.min(this.note.pages.length - 1, index));
+    }
     for (let i = tops.length - 1; i >= 0; i--) {
       if (wy >= tops[i] - GAP / 2) return i;
     }
@@ -771,6 +853,10 @@ export class Editor {
 
   scrollToPage(index) {
     this.layout();
+    if (this.paged) {
+      this.camera.z = Math.min(this.camera.z, this.fitZoom);
+      this.camera.x = this.pagedCameraX(index);
+    }
     this.camera.y = this.pageTops[index] - (this.headerHeight + 12) / this.camera.z;
     this.clampCamera();
     this.requestFrame();
@@ -836,11 +922,11 @@ export class Editor {
 
     this.note.pages.forEach((page, index) => {
       const top = tops[index];
-      const sx = (0 - cx) * z;
+      const sx = (this.origins[index][0] - cx) * z;
       const sy = (top - cy) * z;
       const sw = page.width * z;
       const sh = page.height * z;
-      if (sy > this.height || sy + sh < 0) return;
+      if (sy > this.height || sy + sh < 0 || sx > this.width || sx + sw < 0) return;
       visible.add(page);
 
       // the page's shadow
@@ -1116,18 +1202,33 @@ export class Editor {
       if (this.pointers.size === 0) {
         this.gesture = null;
         this.interacting = false;
+        if (this.paged) {
+          const recent = performance.now() - (gesture.lastTime ?? 0) < 80;
+          this.snapToPage(recent ? (gesture.velocity ?? 0) : 0);
+        }
         this.requestFrame();
       } else if (this.pointers.size === 1 && gesture.moved) {
-        // the finger left on the screen carries on scrolling
         this.gesture = null;
         this.interacting = false;
-        this.startPan([...this.pointers.keys()][0]);
+        if (this.paged) {
+          // the swipe turns the page; the other finger is about to lift too
+          const recent = performance.now() - (gesture.lastTime ?? 0) < 80;
+          this.snapToPage(recent ? (gesture.velocity ?? 0) : 0);
+          this.gesture = { kind: 'done' };
+        } else {
+          // the finger left on the screen carries on scrolling
+          this.startPan([...this.pointers.keys()][0]);
+        }
       }
       // otherwise it may still be a tap with several fingers
       return;
     }
     if (gesture.kind === 'pan') {
       if (gesture.pointerId === e.pointerId) this.endPan();
+      return;
+    }
+    if (gesture.kind === 'done') {
+      if (this.pointers.size === 0) this.gesture = null;
       return;
     }
     if (gesture.pointerId !== e.pointerId) return;
@@ -1139,6 +1240,12 @@ export class Editor {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
       this.zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY / 200));
+    } else if (this.paged && this.camera.z <= this.fitZoom * 1.05) {
+      // the wheel turns the pages
+      this.camera.x += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / this.camera.z;
+      this.clampCamera();
+      clearTimeout(this.wheelSnap);
+      this.wheelSnap = setTimeout(() => this.snapToPage(0), 160);
     } else {
       this.camera.x += e.deltaX / this.camera.z;
       this.camera.y += e.deltaY / this.camera.z;
@@ -1203,6 +1310,7 @@ export class Editor {
     const [vx, vy] = this.gesture.velocity;
     const lastMove = this.gesture.time;
     this.gesture = null;
+    if (this.paged && this.snapToPage(performance.now() - lastMove < 80 ? vx : 0)) return;
     let velocity = [vx * 16, vy * 16];
     const step = () => {
       velocity = [velocity[0] * 0.94, velocity[1] * 0.94];
@@ -1248,6 +1356,13 @@ export class Editor {
     if (Math.abs(distance - gesture.distance) > 8 || Math.hypot(center[0] - gesture.center[0], center[1] - gesture.center[1]) > 8) {
       gesture.moved = true;
     }
+    const now = performance.now();
+    if (gesture.lastCenter) {
+      const dt = Math.max(1, now - gesture.lastTime);
+      gesture.velocity = (center[0] - gesture.lastCenter[0]) / dt;
+    }
+    gesture.lastCenter = center;
+    gesture.lastTime = now;
     const z = Math.max(this.fitZoom * 0.5, Math.min(this.fitZoom * 8, gesture.zoom * (distance / gesture.distance)));
     this.camera.z = z;
     this.camera.x = gesture.world[0] - center[0] / z;
@@ -1286,9 +1401,9 @@ export class Editor {
     if (this.tool === 'lasso') {
       if (this.selection) {
         const b = this.selection.bounds;
-        const top = this.pageOffset(this.selection.page);
+        const [left, top] = this.pageOrigin(this.selection.page);
         const [wx, wy] = this.toWorld(point.x, point.y);
-        const x = wx;
+        const x = wx - left;
         const y = wy - top;
         const handleDistance = Math.hypot(x - b.right, y - b.bottom) * this.camera.z;
         if (handleDistance <= HANDLE_RADIUS) {
@@ -1383,7 +1498,8 @@ export class Editor {
   /** The point on `page` under the event. */
   pointOn(page, e) {
     const [wx, wy] = this.toWorld(e.offsetX, e.offsetY);
-    return [wx, wy - this.pageOffset(page)];
+    const [left, top] = this.pageOrigin(page);
+    return [wx - left, wy - top];
   }
 
   moveTool(e) {
@@ -1637,10 +1753,13 @@ export class Editor {
       'div.selection-bar',
       {},
       this.selection?.strokes.length
-        ? h('button', { onclick: () => this.recolorSelection() }, icon('palette'), 'Couleur')
+        ? h('button', { onclick: () => this.recolorSelection(), title: 'Couleur', 'aria-label': 'Couleur' }, icon('palette'), h('span.label', {}, 'Couleur'))
         : null,
-      h('button', { onclick: () => this.duplicateSelection() }, icon('copy'), 'Dupliquer'),
-      h('button', { onclick: () => this.deleteSelection() }, icon('trash'), 'Supprimer'),
+      h('button', { onclick: () => this.duplicateSelection(), title: 'Dupliquer', 'aria-label': 'Dupliquer' }, icon('copy'), h('span.label', {}, 'Dupliquer')),
+      this.selection?.strokes.length
+        ? h('button', { onclick: () => this.saveElement(), title: 'Élément', 'aria-label': 'Élément' }, icon('star'), h('span.label', {}, 'Élément'))
+        : null,
+      h('button', { onclick: () => this.deleteSelection(), title: 'Supprimer', 'aria-label': 'Supprimer' }, icon('trash'), h('span.label', {}, 'Supprimer')),
     );
     this.element.append(this.selectionBar);
     this.positionSelectionBar();
@@ -1649,9 +1768,9 @@ export class Editor {
   positionSelectionBar() {
     if (!this.selectionBar || !this.selection) return;
     const b = this.selection.bounds;
-    const top = this.pageOffset(this.selection.page);
+    const [left, top] = this.pageOrigin(this.selection.page);
     const z = this.camera.z;
-    const x = ((b.left + b.right) / 2 - this.camera.x) * z;
+    const x = (left + (b.left + b.right) / 2 - this.camera.x) * z;
     let y = (top + b.top - this.camera.y) * z - 12;
     y = Math.max(this.headerHeight + 56, y);
     const half = (this.selectionBar.offsetWidth || 280) / 2;
@@ -1780,6 +1899,8 @@ export class Editor {
         'div.menu',
         {},
         h('button', { onclick: () => close('photo') }, icon('photo'), 'Ajouter une photo'),
+        h('button', { onclick: () => close('elements') }, icon('star'), 'Éléments'),
+        h('button', { onclick: () => close('text') }, icon('text'), 'Texte de la page'),
         h('button', { onclick: () => close('pages') }, icon('pages'), 'Pages et sommaire'),
         h('button', { onclick: () => close('add') }, icon('plus'), 'Ajouter une page', h('span.hint', {}, `après la ${index + 1}`)),
         h('button', { onclick: () => close('bookmark') }, icon('bookmark', { filled: bookmarked }), bookmarked ? 'Retirer le signet' : 'Ajouter un signet'),
@@ -1797,10 +1918,21 @@ export class Editor {
         this.options.share
           ? null
           : h('button', { onclick: () => close('share') }, icon('share'), 'Partager'),
+        h(
+          'button',
+          { onclick: () => close('paged') },
+          icon('pages'),
+          this.paged ? 'Faire défiler les pages' : 'Tourner les pages une à une',
+        ),
+        h('button', { onclick: () => close('pdf') }, icon('download'), 'Exporter en PDF'),
         h('button', { onclick: () => close('fit') }, icon('notebook'), 'Ajuster à la largeur'),
       ),
     ]);
     if (choice === 'photo') this.pickPhoto();
+    if (choice === 'elements') this.showElements();
+    if (choice === 'text') this.editText(index);
+    if (choice === 'pdf') this.exportPdf();
+    if (choice === 'paged') this.togglePaged();
     if (choice === 'pages') this.showPages();
     if (choice === 'add') this.addPageAfter(index);
     if (choice === 'bookmark') this.toggleBookmark(index);
@@ -1809,6 +1941,7 @@ export class Editor {
     if (choice === 'study') this.study();
     if (choice === 'share') copyShareLink(this.options.path);
     if (choice === 'fit') this.fitWidth();
+
   }
 
   /** Lets the user add a photo, from the camera or their library. */
@@ -1883,6 +2016,131 @@ export class Editor {
     this.setTool('lasso');
     this.select(page, [], [image]);
     toast('Photo ajoutée · glissez-la pour la placer');
+  }
+
+  saveElement() {
+    if (!this.selection) return;
+    Elements.add(this.selection.strokes);
+    toast('Ajouté à vos éléments');
+  }
+
+  /** Shows the saved elements, to add one to the page on screen. */
+  async showElements() {
+    const element = await sheet((close) => {
+      const grid = h('div.elements');
+      const render = () => {
+        const elements = Elements.all();
+        if (!elements.length) {
+          grid.replaceChildren(
+            h(
+              'p',
+              { style: { gridColumn: '1 / -1' } },
+              "Sélectionnez de l'écriture au lasso, puis touchez « Élément » pour la retrouver ici et l'ajouter à n'importe quel carnet.",
+            ),
+          );
+          return;
+        }
+        grid.replaceChildren(
+          ...elements.map((element) => {
+            const canvas = document.createElement('canvas');
+            const size = 120;
+            const scale = Math.min(size / Math.max(element.w, 1), size / Math.max(element.h, 1), 1.5) * 0.85;
+            canvas.width = canvas.height = size * this.dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(
+              scale * this.dpr, 0, 0, scale * this.dpr,
+              ((size - element.w * scale) / 2) * this.dpr,
+              ((size - element.h * scale) / 2) * this.dpr,
+            );
+            for (const stroke of Elements.strokesOf(element)) drawStroke(ctx, stroke);
+            return h(
+              'div.element',
+              {},
+              h('button.preview', { onclick: () => close(element) }, canvas),
+              h(
+                'button.remove',
+                {
+                  'aria-label': 'Supprimer cet élément',
+                  onclick: () => {
+                    Elements.remove(element.id);
+                    render();
+                  },
+                },
+                icon('close'),
+              ),
+            );
+          }),
+        );
+      };
+      render();
+      return [h('h2', {}, 'Éléments'), grid];
+    });
+    if (!element) return;
+
+    const index = this.currentPageIndex;
+    const page = this.note.pages[index];
+    const [cx, cy] = this.toWorld(this.width / 2, this.height / 2);
+    const x = Math.max(0, Math.min(page.width - element.w, cx - this.pageOrigin(page)[0] - element.w / 2));
+    const y = Math.max(0, Math.min(page.height - element.h, cy - this.pageOffset(page) - element.h / 2));
+    const strokes = Elements.strokesOf(element, x, y);
+    for (const stroke of strokes) page.insertStroke(stroke);
+    this.note.ensureBlankLastPage();
+    this.commit(strokes.map((stroke) => Ops.addStroke(page, stroke)), [Ops.removeStrokes(strokes)]);
+    this.setTool('lasso');
+    this.select(page, strokes);
+  }
+
+  /** Lets the user type the text of the page at `index`. */
+  async editText(index) {
+    const page = this.note.pages[index];
+    const before = plainText(page.text);
+    const value = await sheet((close) => {
+      const area = h('textarea.text-editor', { rows: 10, placeholder: 'Tapez du texte…' });
+      area.value = before.replace(/\n$/, '');
+      return [
+        h('h2', {}, `Texte de la page ${index + 1}`),
+        h('p', {}, 'Il apparaît en haut de la page, sous votre écriture.'),
+        area,
+        h(
+          'div.row',
+          { style: { marginTop: '14px' } },
+          h('button.btn', { onclick: () => close() }, 'Annuler'),
+          h('button.btn.primary', { onclick: () => close(area.value) }, 'Enregistrer'),
+        ),
+      ];
+    });
+    if (value === undefined) return;
+    const change = textChange(before, value + '\n');
+    if (!change.length) return;
+    page.text = compose(page.text, change);
+    page.changed();
+    this.note.ensureBlankLastPage();
+    // the server merges it with what others typed at the same time
+    this.session.submit([{ t: 'qd', pg: page.id, d: change, b: int(this.session.seq) }]);
+    this.savePending();
+    this.requestFrame();
+  }
+
+  async exportPdf() {
+    toast('Préparation du PDF…', 1500);
+    const pdf = await exportPdf(this.note);
+    if (!pdf) return toast('Ce carnet est vide.');
+    const name = `${this.options.name}.pdf`;
+    const file = new File([pdf], name, { type: 'application/pdf' });
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: this.options.name });
+        return;
+      }
+    } catch {
+      // cancelled: fall back to downloading it
+    }
+    const url = URL.createObjectURL(file);
+    const link = h('a', { href: url, download: name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
   toggleFlashcards() {
