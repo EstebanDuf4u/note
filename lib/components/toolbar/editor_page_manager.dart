@@ -17,6 +17,7 @@ class EditorPageManager extends StatefulWidget {
     required this.duplicatePage,
     required this.clearPage,
     required this.deletePage,
+    required this.movePage,
     required this.transformationController,
   });
 
@@ -28,6 +29,9 @@ class EditorPageManager extends StatefulWidget {
   final void Function(int) duplicatePage;
   final void Function(int) clearPage;
   final void Function(int) deletePage;
+
+  /// Moves the page at the first index so that it ends up at the second.
+  final void Function(int oldIndex, int newIndex) movePage;
 
   final TransformationController transformationController;
 
@@ -155,18 +159,7 @@ class _EditorPageManagerState extends State<EditorPageManager> {
         },
         onReorderItem: (oldIndex, newIndex) {
           if (oldIndex == newIndex) return;
-          widget.coreInfo.pages.insert(
-            newIndex,
-            widget.coreInfo.pages.removeAt(oldIndex),
-          );
-
-          // reassign pageIndex of pages' strokes and images
-          for (int i = 0; i < widget.coreInfo.pages.length; i++) {
-            final page = widget.coreInfo.pages[i];
-            page.updatePageIndex(i);
-          }
-
-          widget.redrawAndSave();
+          widget.movePage(oldIndex, newIndex);
         },
       ),
     );

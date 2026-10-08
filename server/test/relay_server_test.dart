@@ -65,6 +65,7 @@ void main() {
       dataDirectory: dataDirectory,
       allowRegistration: allowRegistration,
       passwordIterations: 100,
+      roomIdleTimeout: const Duration(milliseconds: 50),
     );
     await server.start(address: InternetAddress.loopbackIPv4, port: 0);
   }
@@ -387,6 +388,48 @@ void main() {
       expect(_int(synced.single['head']), 3);
       expect(b.messages.map((message) => message['k']), ['op', 'op', 'synced']);
       expect(b.messages.take(2).map((message) => _int(message['seq'])), [2, 3]);
+    });
+
+    test('a note that nobody has open is reloaded from disk', () async {
+      final a = await _TestClient.connect(server, token)
+        ..join('/note', 'a');
+      await a.waitFor('synced', 1);
+      // large enough to be read in several pieces
+      final big = Uint8List(300 * 1024)..fillRange(0, 300 * 1024, 7);
+      a.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {'n': 1, 'b': BsonBinary.from(big)},
+      });
+      a.send({
+        'k': 'op',
+        'cid': 2,
+        'd': {'n': 2},
+      });
+      await a.waitFor('ack', 2);
+      await a.socket.close();
+
+      // the room is unloaded once it has been idle for a while
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final (_, list) = await request('GET', '/notes', token: token);
+      expect(_int((list['notes'] as List).single['head']), 2);
+
+      final b = await _TestClient.connect(server, token)
+        ..join('/note', 'b');
+      await b.waitFor('synced', 1);
+      final ops = b.messages.where((m) => m['k'] == 'op').toList();
+      expect(ops.map((op) => (op['d'] as Map)['n']), [1, 2]);
+      expect(((ops.first['d'] as Map)['b'] as BsonBinary).byteList, big);
+
+      // and new operations are numbered after the old ones
+      b.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {'n': 3},
+      });
+      final acks = await b.waitFor('ack', 1);
+      expect(_int(acks.single['seq']), 3);
     });
 
     test('ignores operations that are sent twice', () async {
