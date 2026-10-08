@@ -26,7 +26,11 @@ class Canvas extends StatelessWidget {
     required this.currentTool,
     required this.currentScale,
     this.placeholder = false,
+    this.overlay,
   });
+
+  /// Drawn over the page, in page coordinates, e.g. other people's cursors.
+  final Widget? overlay;
 
   final String path;
   final EditorPage page;
@@ -111,26 +115,33 @@ class Canvas extends StatelessWidget {
               ? SizedBox(
                   width: page.size.width,
                   height: page.size.height,
-                  child: OnyxSdkPenArea(
-                    refreshDelay: const Duration(seconds: 1),
-                    strokeStyle: _getOnyxTool(currentTool),
-                    strokeColor: _getOnyxColor(),
-                    strokeWidth: _getOnyxWidth(),
-                    child: InnerCanvas(
-                      key: page.innerCanvasKey,
-                      pageIndex: pageIndex,
-                      redrawPageListenable: page,
-                      width: page.size.width,
-                      height: page.size.height,
-                      textEditing: textEditing,
-                      coreInfo: coreInfo,
-                      currentStroke: currentStroke,
-                      currentStrokeDetectedShape: currentStrokeDetectedShape,
-                      currentSelection: currentSelection,
-                      setAsBackground: setAsBackground,
-                      currentToolIsSelect: currentTool.toolId == ToolId.select,
-                      currentScale: currentScale,
-                    ),
+                  child: Stack(
+                    children: [
+                      OnyxSdkPenArea(
+                        refreshDelay: const Duration(seconds: 1),
+                        strokeStyle: _getOnyxTool(currentTool),
+                        strokeColor: _getOnyxColor(),
+                        strokeWidth: _getOnyxWidth(),
+                        child: InnerCanvas(
+                          key: page.innerCanvasKey,
+                          pageIndex: pageIndex,
+                          redrawPageListenable: page,
+                          width: page.size.width,
+                          height: page.size.height,
+                          textEditing: textEditing,
+                          coreInfo: coreInfo,
+                          currentStroke: currentStroke,
+                          currentStrokeDetectedShape:
+                              currentStrokeDetectedShape,
+                          currentSelection: currentSelection,
+                          setAsBackground: setAsBackground,
+                          currentToolIsSelect:
+                              currentTool.toolId == ToolId.select,
+                          currentScale: currentScale,
+                        ),
+                      ),
+                      if (overlay != null) Positioned.fill(child: overlay!),
+                    ],
                   ),
                 )
               : SizedBox(width: page.size.width, height: page.size.height),

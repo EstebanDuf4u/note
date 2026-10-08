@@ -46,6 +46,8 @@ class RealtimeSession {
     required this.onRemoteChange,
     required this.onLocalStateChange,
     this.onStopped,
+    this.share,
+    this.onPresence,
     this.minReconnectDelay = const Duration(seconds: 1),
     this.maxReconnectDelay = const Duration(seconds: 30),
   });
@@ -64,6 +66,15 @@ class RealtimeSession {
 
   /// Identifies this device among the others of the account.
   final String clientId;
+
+  /// The token of the link that the note was opened with,
+  /// if it's another account's note. [room] is then ignored by the server.
+  final String? share;
+
+  /// Called when another device says where its user is in the note,
+  /// with null [presence] when it leaves.
+  final void Function(String from, String user, Map<String, dynamic>? presence)?
+  onPresence;
 
   final NoteOpApplier applier;
   EditorCoreInfo get coreInfo => applier.coreInfo;
@@ -271,6 +282,7 @@ class RealtimeSession {
       'since': coreInfo.realtimeSeq ?? 0,
       'client': clientId,
       'token': token,
+      'share': ?share,
       // a note that has never been synced replaces a deleted one of its name
       'create': coreInfo.realtimeSeq == null,
     });
@@ -299,6 +311,12 @@ class RealtimeSession {
         onLocalStateChange();
       case 'synced':
         _onSynced(opInt(message['head']));
+      case 'presence':
+        onPresence?.call(
+          message['from'] as String? ?? '',
+          message['user'] as String? ?? '',
+          (message['d'] as Map?)?.cast<String, dynamic>(),
+        );
       case 'deleted':
         _stop(.deleted);
       case 'error':
@@ -432,6 +450,13 @@ class RealtimeSession {
 
   void _advanceSeq(int seq) {
     if (seq > (coreInfo.realtimeSeq ?? 0)) coreInfo.realtimeSeq = seq;
+  }
+
+  /// Tells the other devices in the note where this user is,
+  /// e.g. `{'pg': pageId, 'x': 10, 'y': 20}`, or that they've left it.
+  void sendPresence(Map<String, dynamic>? presence) {
+    if (state.value != .live) return;
+    _send({'k': 'presence', 'd': presence});
   }
 
   void _send(Map<String, dynamic> message) {

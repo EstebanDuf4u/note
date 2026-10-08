@@ -297,6 +297,22 @@ profile:
       Si vous utilisez le serveur Saber officiel, votre compte sera supprimé au bout d'une semaine . Durant cette période, vous pourrez me contacter à adilhanney@disroot.org pour annuler la suppression.
       Si vous utilisez un autre serveur, il n'est pas certain que vous puissiez supprimer votre compte dessus : il vous faudra consulter les règles de confidentialité du serveur pour plus d'informations.
   quotaUsageUncapped(OUTDATED): Vous utilisez $used
+sharing:
+  title: Partager
+  description: Toute personne qui a le lien peut ouvrir cette note et y écrire avec vous, en direct. Il lui faut un compte sur votre serveur.
+  createLink: Créer un lien
+  copy: Copier le lien
+  copied: Lien copié
+  stop: Arrêter le partage
+  close: Fermer
+  sharedBy: Partagée avec vous par $owner
+  offline: Le serveur est injoignable. Réessayez une fois en ligne.
+  failed: Une erreur est survenue. Réessayez.
+  openLink: Ouvrir une note partagée
+  linkHint: Collez le lien que l'on vous a donné
+  invalidLink: Ce lien ne fonctionne pas, ou n'est plus partagé.
+  open: Ouvrir
+  collaborators: Aussi ici
 appInfo:
   licenseNotice: |-
     Note+  Copyright © 2026  Noryx

@@ -180,6 +180,16 @@ class RelayServer {
         await _unshare(userId, _string(body, 'path'));
         return {};
 
+      case ('POST', '/notes/rename'):
+        final userId = _authenticate(request);
+        final body = await _readBody(request);
+        await shares.renamed(
+          userId,
+          _string(body, 'from'),
+          _string(body, 'to'),
+        );
+        return {};
+
       case ('POST', '/shares/accept'):
         final userId = _authenticate(request);
         final token = _string(await _readBody(request), 'token');

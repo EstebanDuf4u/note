@@ -297,6 +297,22 @@ profile:
       Tap on the "@:profile.quickLinks.deleteAccount" button above, and login if needed.
       If you are using the official Saber server, your account will be deleted after a 1 week grace period. You can contact me at adilhanney@disroot.org during this period to cancel the deletion.
       If you are using a third party server, there might not be an option to delete your account: you'll need to consult the server's privacy policy for more information.
+sharing:
+  title: Share
+  description: Anyone with the link can open this note and write in it with you, as it happens. They need an account on your server.
+  createLink: Create a link
+  copy: Copy the link
+  copied: Link copied
+  stop: Stop sharing
+  close: Close
+  sharedBy: Shared with you by $owner
+  offline: The server can't be reached. Try again once you're online.
+  failed: Something went wrong. Try again.
+  openLink: Open a shared note
+  linkHint: Paste the link you were given
+  invalidLink: This link doesn't work, or isn't shared anymore.
+  open: Open
+  collaborators: Also here
 appInfo:
   licenseNotice: |-
     Note+  Copyright © 2026  Noryx

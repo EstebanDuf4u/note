@@ -19,6 +19,7 @@ class RealtimeAccountException implements Exception {
   static const invalidServer = 'invalid_server';
   static const unreachable = 'unreachable';
   static const unauthorized = 'unauthorized';
+  static const notFound = 'not_found';
 
   @override
   String toString() => 'RealtimeAccountException($code)';
@@ -26,7 +27,15 @@ class RealtimeAccountException implements Exception {
 
 /// The notes of the account, as listed by the server.
 class RemoteNotes {
-  const new({required this.heads, required this.deleted});
+  const new({
+    required this.heads,
+    required this.deleted,
+    this.shared = const {},
+  });
+
+  /// The notes of other accounts that the user opened from a link,
+  /// by their link's token.
+  final Map<String, ({String path, String owner, int head})> shared;
 
   /// The number of operations of each note, by the note's path.
   final Map<String, int> heads;
@@ -232,6 +241,7 @@ abstract final class RealtimeAccount {
   static void _forgetSyncState() {
     stows.realtimePendingDeletes.value = [];
     stows.realtimeNoteSeqs.value = '{}';
+    stows.sharedNotes.value = '{}';
     // everything is sent to the new account
     stows.noteLibraryUnsent.value = NoteLibrary.allPaths;
     NoteLibrary.forgetChangeTimes();
@@ -245,6 +255,14 @@ abstract final class RealtimeAccount {
           (note as Map)['path'] as String: (note['head'] as num).toInt(),
       },
       deleted: (json['deleted'] as List).cast<String>().toSet(),
+      shared: {
+        for (final note in json['shared'] as List? ?? const [])
+          (note as Map)['token'] as String: (
+            path: note['path'] as String,
+            owner: note['owner'] as String? ?? '',
+            head: (note['head'] as num).toInt(),
+          ),
+      },
     );
   }
 
@@ -252,6 +270,51 @@ abstract final class RealtimeAccount {
   /// so that the user's other devices delete it too.
   static Future<void> deleteNote(String path) =>
       _authorizedRequest('POST', '/notes/delete', body: {'path': path});
+
+  /// Shares the note at [path] with whoever has its link,
+  /// and returns the link's token.
+  static Future<String> shareNote(String path) async {
+    final json = await _authorizedRequest(
+      'POST',
+      '/notes/share',
+      body: {'path': path},
+    );
+    return json['token'] as String;
+  }
+
+  /// Stops sharing the note at [path]: its link stops working.
+  static Future<void> unshareNote(String path) =>
+      _authorizedRequest('POST', '/notes/unshare', body: {'path': path});
+
+  /// Tells the server that the note at [fromPath] is now at [toPath],
+  /// so that its link keeps working.
+  static Future<void> noteRenamed(String fromPath, String toPath) =>
+      _authorizedRequest(
+        'POST',
+        '/notes/rename',
+        body: {'from': fromPath, 'to': toPath},
+      );
+
+  /// Opens the note shared as [token], and returns where it is in its
+  /// owner's library, who the owner is, and whether it's the user's own.
+  static Future<({String path, String owner, bool own})> acceptShare(
+    String token,
+  ) async {
+    final json = await _authorizedRequest(
+      'POST',
+      '/shares/accept',
+      body: {'token': token},
+    );
+    return (
+      path: json['path'] as String,
+      owner: json['owner'] as String? ?? '',
+      own: json['own'] == true,
+    );
+  }
+
+  /// Removes the note shared as [token] from the user's notes.
+  static Future<void> leaveShare(String token) =>
+      _authorizedRequest('POST', '/shares/leave', body: {'token': token});
 
   /// Sends the [changes] to the favorites and covers made on this device,
   /// and returns those of the whole account.
