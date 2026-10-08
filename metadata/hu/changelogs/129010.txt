@@ -1,3 +1,0 @@
-• A kezdőképernyőn a kártyák most szegélyezettek, nem pedig árnyékosak.
-• Letiltva az automatikus javítást a Nextcloud URL mezőjében a bejelentkezési oldalon.
-• A „https://” opcionális a Nextcloud URL mezőjében.

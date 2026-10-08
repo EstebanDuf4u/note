@@ -1,2 +1,0 @@
-• Opravená podpora automatického vyplňování na stránce šifrovacího hesla.
-• Různá vylepšení uživatelského rozhraní.

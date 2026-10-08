@@ -1,4 +1,1 @@
-• Amélioration du design du flux de connexion.
-• Ajustement de la friction de défilement dans l'éditeur pour le rendre moins glissant.
-• Correction de la gestion des comptes avec un quota de stockage illimité.
-• Correction du tri des dossiers sur la page de navigation.
+Première version de Note+ : synchro en temps réel, bibliothèque de carnets, onglets, gomme partielle, redimensionnement au lasso, pages tournées une à une, fiches de révision et ruban adhésif.

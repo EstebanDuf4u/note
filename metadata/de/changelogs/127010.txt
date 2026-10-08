@@ -1,2 +1,0 @@
-• Die Unterstützung für das automatische Ausfüllen auf der Seite mit dem Verschlüsselungskennwort wurde korrigiert. 
-• Verschiedene Verbesserungen der Benutzeroberfläche.

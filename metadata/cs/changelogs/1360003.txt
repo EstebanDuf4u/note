@@ -1,3 +1,0 @@
-• Opravena neohrzená animace při otevírání a zavírání lišty.
-• Přidány průvodní odrážky do stromu souborů v liště.
-• Jiné drobné zlepšení

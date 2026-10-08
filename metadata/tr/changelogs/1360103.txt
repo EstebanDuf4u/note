@@ -1,4 +1,0 @@
-• Giriş akışının tasarımı iyileştirildi.
-• Editördeki kaydırma sürtünmesi daha az kaygan hale getirmek için ayarlandı.
-• Sınırsız depolama kotasına sahip hesapların işlenmesi düzeltildi.
-• Göz atma sayfasında klasörlerin sıralanmaması sorunu giderildi.

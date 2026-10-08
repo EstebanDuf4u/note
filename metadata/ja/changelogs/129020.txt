@@ -1,1 +1,0 @@
-ページ番号は Atkinson Hyperlegible フォント設定を考慮するようになりました。

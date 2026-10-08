@@ -1,3 +1,0 @@
-• Karakterizaĵo: Vi nun povas eksporti la nunan paĝon kiel PNG
-• Fiksa: Sync progreso indikilo estis akiranta blokita kiam translokigo malsukcesas
-• Tweak: Reduktita ofteco de reprovi malsukcesajn sinkronigajn translokojn

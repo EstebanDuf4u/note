@@ -341,8 +341,8 @@ class Translations$appInfo$en {
 
 	// Translations
 
-	/// en: 'Saber Copyright © 2022-$buildYear Adil Hanney This program comes with absolutely no warranty. This is free software, and you are welcome to redistribute it under certain conditions.'
-	String licenseNotice({required Object buildYear}) => 'Saber  Copyright © 2022-${buildYear}  Adil Hanney\nThis program comes with absolutely no warranty. This is free software, and you are welcome to redistribute it under certain conditions.';
+	/// en: 'Note+ Copyright © 2026 Noryx Saber Copyright © 2022-$buildYear Adil Hanney This program comes with absolutely no warranty. This is free software, and you are welcome to redistribute it under certain conditions.'
+	String licenseNotice({required Object buildYear}) => 'Note+  Copyright © 2026  Noryx\nSaber  Copyright © 2022-${buildYear}  Adil Hanney\nThis program comes with absolutely no warranty. This is free software, and you are welcome to redistribute it under certain conditions.';
 
 	/// en: 'DEBUG'
 	String get debug => 'DEBUG';
@@ -352,6 +352,9 @@ class Translations$appInfo$en {
 
 	/// en: 'Tap here to view more license information'
 	String get licenseButton => 'Tap here to view more license information';
+
+	/// en: 'Based on Saber: view its source code'
+	String get basedOnSaber => 'Based on Saber: view its source code';
 
 	/// en: 'Tap here to view the privacy policy'
 	String get privacyPolicyButton => 'Tap here to view the privacy policy';

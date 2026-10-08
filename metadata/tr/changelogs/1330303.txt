@@ -1,3 +1,0 @@
-• "Silgiyi kullanımdan sonra devre dışı bırak" ayarının kapanmadığı bir hatayı düzelttim
-• Fling jest işleme sırasında bir bellek sızıntısını düzelttim
-• Onyx Boox cihazları için Onyx SDK'yu güncelledim

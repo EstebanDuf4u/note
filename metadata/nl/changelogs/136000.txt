@@ -1,3 +1,0 @@
-• Opgelost haperende animatie bij het openen en sluiten van de zijbalk.
-• Toegevoegde inspringgidsen aan de bestandsboom in de zijbalk.
-• Diverse transitieve verbeteringen

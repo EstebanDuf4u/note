@@ -1,4 +1,0 @@
-• Přidáno polské a katalánské překlady
-• Přidáno potvrzovací prompt při smazání poznámek
-• Používání zrušení/opakování změny vzoru pozadí
-• Opraveno chybou, kdy změna vzoru pozadí nezapouštěla automatické uložení

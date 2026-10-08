@@ -1,1 +1,0 @@
-Support du stylet amélioré expérimental sur Windows, ajoutant la détection de l'orientation et des boutons.

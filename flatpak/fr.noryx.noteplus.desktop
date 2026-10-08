@@ -3,8 +3,8 @@ Version=1.0
 Type=Application
 
 Name=Note+
-Comment=The notes app built for handwriting.
-Comment[cs]=Aplikace pro psaní poznámek uzpůsobená pro ruční psaní.
+Comment=Handwritten notes that sync in real time across your devices
+Comment[fr]=Des notes manuscrites synchronisées en temps réel sur vos appareils
 Categories=Office;WordProcessor;
 
 Icon=fr.noryx.noteplus

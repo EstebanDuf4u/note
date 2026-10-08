@@ -1,1 +1,0 @@
-Os números das páginas agora respeitam a configuração da fonte Atkinson Hyperlegible.

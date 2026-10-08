@@ -1,3 +1,0 @@
-• Özellik: Artık geçerli sayfayı PNG olarak dışa aktarabilirsiniz
-• Düzeltildi: Bir aktarım başarısız olduğunda senkronizasyon ilerleme göstergesi takılı kalıyordu
-• İnce Ayar: Başarısız senkronizasyon aktarımlarını yeniden deneme sıklığı azaltıldı

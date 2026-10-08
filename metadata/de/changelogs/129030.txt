@@ -1,1 +1,0 @@
-Viele Fehler im Texteditor behoben, die nach einem automatischen Speichern auftraten.

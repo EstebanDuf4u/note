@@ -1,3 +1,0 @@
-• Javítva a széteső animáció, amikor megnyitják és bezárják az oldalsávot.
-• Hozzáadva beindító útmutatókat a fájlfahoz az oldalsávban.
-• Egyéb átmeneti javítások

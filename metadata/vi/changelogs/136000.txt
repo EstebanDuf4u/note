@@ -1,3 +1,0 @@
-• Sửa lỗi hoạt ảnh giật khi mở và đóng thanh bên (sidebar).
-• Thêm các đường dẫn thụt lề vào cây tệp trong thanh bên.
-• Cải tiến chung khác

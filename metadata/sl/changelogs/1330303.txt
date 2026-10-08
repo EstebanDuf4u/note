@@ -1,3 +1,0 @@
-• Popravljeno napaka, pri čem se nastavenie „Onemknite gumič“ neaktivovalo
-• Popravljeno porušenie paměti pri zpracování gestů fling
-• Aktualizováno SDK Onyx pro zařízení Onyx Boox

@@ -1,3 +1,0 @@
-• Startbildschirmkarten sind jetzt umrandet statt schattiert.
-• Autokorrektur im Nextcloud-URL-Feld auf der Anmeldeseite deaktiviert.
-• „https://“ im Nextcloud-URL-Feld optional gemacht.

@@ -1,3 +1,0 @@
-• Bir notu kapatırken animasyon düzgünlüğü iyileştirildi.
-• Fare tekerleğiniz artık yakınlaştırmak yerine kaydırıyor. Yakınlaştırmak için Ctrl tuşu + fare tekerleğini kullanın.
-• Yeni Not düğmesinin yuvarlaklığı azaltıldı.

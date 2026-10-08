@@ -1,17 +1,22 @@
-Saber is the notes app built for handwriting.
+Note+ is a handwriting notes app for students and professionals, with notebooks that stay in sync on all your devices as you write.
 
-It's designed to be as simple and intuitive as possible, while still delivering unique features that you'll actually use. Additionally, Saber is available across all your devices, large and small, and syncs between them seamlessly.
+Write on one device and watch the ink appear on the others. Every stroke, page, image and line of text is sent as it happens, and changes made offline are merged when you reconnect. Two people typing in the same text box end up with both of their changes.
 
-Notably, it can invert your notes when you're in dark mode. This allows you to write with white ink on a black background, which is much easier on the eyes in low-light environments like when the teacher turns off the lights in class.
-Images and PDFs are also inverted, so you can still use a digital printout or a textbook without the fuss.
+A library that looks like your bookshelf
+• Notebooks with colored covers or a preview of their first page
+• Favorites and search, synced with your account
+• Open several notebooks as tabs and switch between them in one tap
 
-Saber uses a dual-password system to protect your notes from anyone but you, even if they have complete control over the server. You can safely store your notes on the official Saber server, another server, or even host your own!
+Writing that feels natural
+• Fountain pen, ballpoint, pencil and highlighter, with pressure
+• Partial eraser that only removes what's under it, or a whole-stroke eraser
+• Lasso to move, recolor and resize your handwriting
+• Shapes, straight lines, images, PDFs and typed text
+• Scroll through your pages, or turn them one at a time like a real notebook
 
-The app is completely open-source so that anyone can view the source code and see exactly what it's doing and how it handles your data. Many other note-taking apps are closed-source and proprietary, meaning that their inner workings are a mystery to the public.
+Study smarter
+• Flashcards with spaced repetition, made from your own pages
+• Tape to hide answers and reveal them with a tap
 
-As someone who studies maths, highlighting multi-line equations was always a hassle with other apps, where the highlighter would change color when it overlapped with itself. Another problem I had was that in some apps, the highlighter would render on top of the text, fading it out and making it hard to read.
-Saber's highlighter has no such issues. It utilizes canvas compositing to render the highlighter in a way that is consistent with/better than traditional paper, where it handles overlaps and maintains color consistency.
-
-Saber has everything you need to keep your notes organized. Create folders inside folders inside folders to your heart's content with no limit on the number of nested folders. And even though a note may be buried deep within a nested folder, you can still access it easily with your most recent notes always available on the home screen.
-
-Discover a whole new way to capture and organize your thoughts with Saber. Whether you're a student, professional, or creative mind, Saber is your trusted companion for digital handwriting. Download now and let your ideas flow freely!
+Your notes, your server
+Note+ syncs through a small server that you can host yourself, so your notes never have to leave your hands. It is free and open-source software (GPL-3.0), based on Saber by Adil Hanney.

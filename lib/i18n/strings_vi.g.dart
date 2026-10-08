@@ -191,7 +191,7 @@ class _Translations$appInfo$vi extends Translations$appInfo$en {
 	final TranslationsVi _root; // ignore: unused_field
 
 	// Translations
-	@override String licenseNotice({required Object buildYear}) => 'Saber  Copyright © 2022-${buildYear}  Adil Hanney\nỨng dụng này không được bảo hành. Đây là phần mềm tự do, và bạn được chia sẻ lại nó theo các điều kiện nhất định.';
+	@override String licenseNotice({required Object buildYear}) => 'Note+  Copyright © 2026  Noryx\nSaber  Copyright © 2022-${buildYear}  Adil Hanney\nỨng dụng này không được bảo hành. Đây là phần mềm tự do, và bạn được chia sẻ lại nó theo các điều kiện nhất định.';
 	@override String get debug => 'DEBUG';
 	@override String get sponsorButton => 'Nhấn vào đây để mua cho tôi một ly cà phê hoặc mua thêm dung lượng lưu trữ';
 	@override String get licenseButton => 'Nhấn vào đây để xem thêm thông tin bản quyền';

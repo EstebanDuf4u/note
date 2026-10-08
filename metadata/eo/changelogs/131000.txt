@@ -1,3 +1,0 @@
-• Fiksitaj ekstere forigitaj notoj ankoraŭ aperas en lastatempaj notoj
-• Korektis verdan randon/malklarajn ekranajn problemojn malŝaltante la defaŭltan klavaran fokuson de Android
-• Ĝisdatigita al Flutter 3.41
