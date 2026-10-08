@@ -333,6 +333,7 @@ editor:
     years: $n y
   turnPages: Turn pages one at a time
   scrollContinuously: Scroll through the pages
+  closeTab: Close tab
   pagePanel: Page thumbnails
   realtime:
     offline: Realtime sync is offline. Your changes will be sent when it reconnects.

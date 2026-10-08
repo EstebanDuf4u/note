@@ -31,6 +31,7 @@ import 'package:saber/components/toolbar/color_bar.dart';
 import 'package:saber/components/toolbar/editor_bottom_sheet.dart';
 import 'package:saber/components/toolbar/editor_page_manager.dart';
 import 'package:saber/components/toolbar/editor_page_panel.dart';
+import 'package:saber/components/toolbar/editor_tab_bar.dart';
 import 'package:saber/components/toolbar/toolbar.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/editor_exporter.dart';
@@ -41,6 +42,7 @@ import 'package:saber/data/extensions/change_notifier_extensions.dart';
 import 'package:saber/data/extensions/matrix4_extensions.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/nextcloud/saber_syncer.dart';
+import 'package:saber/data/open_tabs.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/data/sync/realtime/account_syncer.dart';
 import 'package:saber/data/sync/realtime/note_ops.dart';
@@ -205,6 +207,7 @@ class EditorState extends State<Editor> {
   @override
   void initState() {
     DynamicMaterialApp.addFullscreenListener(_setState);
+    stows.openTabs.addListener(_setState);
 
     _initAsync();
     _assignKeybindings();
@@ -278,6 +281,10 @@ class EditorState extends State<Editor> {
     await _startRealtime();
   }
 
+  /// The tab that was shown when this note was opened,
+  /// so that this note's tab goes next to it.
+  final _previousTab = OpenTabs.lastShown;
+
   /// Syncs this note with the user's account, if they're signed in to one.
   Future<void> _startRealtime() async {
     _realtime?.dispose();
@@ -290,6 +297,9 @@ class EditorState extends State<Editor> {
     }
     AccountSyncer.instance.noteOpened(coreInfo.filePath);
     _pathOpenForSync = coreInfo.filePath;
+    if (widget.customTitle == null) {
+      OpenTabs.open(coreInfo.filePath, after: _previousTab);
+    }
 
     await RealtimeAccount.waitUntilLoaded();
     if (!mounted) return;
@@ -407,6 +417,13 @@ class EditorState extends State<Editor> {
     _hasUnsavedRealtimeChanges = true;
     autosaveAfterDelay();
   }
+
+  /// Whether the notes open as tabs are shown above the note.
+  bool get _showTabs =>
+      widget.customTitle == null &&
+      coreInfo.filePath.isNotEmpty &&
+      stows.openTabs.value.length >= 2 &&
+      stows.openTabs.value.contains(coreInfo.filePath);
 
   /// Switches between turning pages one at a time and scrolling through them,
   /// staying on the same page.
@@ -2019,6 +2036,9 @@ class EditorState extends State<Editor> {
             ? null
             : AppBar(
                 toolbarHeight: kToolbarHeight,
+                bottom: _showTabs
+                    ? EditorTabBar(currentPath: coreInfo.filePath)
+                    : null,
                 title: widget.customTitle != null
                     ? Text(widget.customTitle!)
                     : Form(
@@ -2535,6 +2555,7 @@ class EditorState extends State<Editor> {
     unawaited(_cleanUpAsync());
 
     DynamicMaterialApp.removeFullscreenListener(_setState);
+    stows.openTabs.removeListener(_setState);
 
     _delayedSaveTimer?.cancel();
     _watchServerTimer?.cancel();

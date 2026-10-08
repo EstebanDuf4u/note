@@ -393,6 +393,9 @@ class Translations$editor$en {
 	/// en: 'Scroll through the pages'
 	String get scrollContinuously => 'Scroll through the pages';
 
+	/// en: 'Close tab'
+	String get closeTab => 'Close tab';
+
 	/// en: 'Page thumbnails'
 	String get pagePanel => 'Page thumbnails';
 

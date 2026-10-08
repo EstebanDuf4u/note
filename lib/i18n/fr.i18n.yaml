@@ -333,6 +333,7 @@ editor:
     years: $n an(s)
   turnPages: Tourner les pages une à une
   scrollContinuously: Faire défiler les pages
+  closeTab: Fermer l'onglet
   pagePanel: Miniatures des pages
   realtime:
     offline: Synchro temps réel hors ligne. Vos modifications seront envoyées à la reconnexion.
