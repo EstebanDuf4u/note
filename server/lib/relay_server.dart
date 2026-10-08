@@ -39,6 +39,7 @@ class RelayServer {
     required this.dataDirectory,
     this.allowRegistration = true,
     int passwordIterations = 100000,
+    this.roomIdleTimeout = const Duration(minutes: 5),
   }) : accounts = AccountStore(
          File('${dataDirectory.path}/accounts.json'),
          passwordIterations: passwordIterations,
@@ -51,6 +52,9 @@ class RelayServer {
   final bool allowRegistration;
 
   final AccountStore accounts;
+
+  /// How long a note stays in memory after its last device has left.
+  final Duration roomIdleTimeout;
 
   /// The notes of each user that has connected since the server started.
   final _notes = <String, Future<_UserNotes>>{};
@@ -81,7 +85,10 @@ class RelayServer {
 
   Future<_UserNotes> _notesOf(String userId) => _notes.putIfAbsent(
     userId,
-    () => _UserNotes.open(Directory('${dataDirectory.path}/users/$userId')),
+    () => _UserNotes.open(
+      Directory('${dataDirectory.path}/users/$userId'),
+      roomIdleTimeout: roomIdleTimeout,
+    ),
   );
 
   Future<void> _onRequest(HttpRequest request) async {
@@ -206,8 +213,8 @@ class RelayServer {
     var queue = Future<void>.value();
     socket.listen(
       (data) => queue = queue.then((_) => _onMessage(client, data)),
-      onDone: () => client.room?.clients.remove(client),
-      onError: (Object _) => client.room?.clients.remove(client),
+      onDone: () => client.room?.leave(client),
+      onError: (Object _) => client.room?.leave(client),
       cancelOnError: true,
     );
   }
@@ -257,7 +264,7 @@ class RelayServer {
       throw const FormatException('Missing client');
     }
 
-    client.room?.clients.remove(client);
+    client.room?.leave(client);
     client.room = null;
 
     final notes = await _notesOf(userId);
@@ -272,17 +279,35 @@ class RelayServer {
       ..notes = notes
       ..room = room;
 
-    for (final frame in room.framesAfter(_int(message['since'] ?? 0))) {
-      client.socket.add(frame);
+    // Operations can be appended while we read the older ones from disk,
+    // so keep going until the device has them all, then start forwarding
+    // new ones to it without letting another operation in between.
+    room.cancelIdleClose();
+    room.joining++;
+    try {
+      var sent = _int(message['since'] ?? 0).clamp(0, room.head);
+      while (sent < room.head) {
+        final end = room.head;
+        await for (final frame in room.framesAfter(sent, end: end)) {
+          if (client.room != room) return; // it joined another room meanwhile
+          client.socket.add(frame);
+        }
+        sent = end;
+      }
+    } finally {
+      room.joining--;
     }
     client.send({'k': 'synced', 'head': room.head});
     room.clients.add(client);
+    room.cancelIdleClose();
   }
 }
 
 /// The notes of one account.
 class _UserNotes {
-  new _(this.directory);
+  new _(this.directory, {required this.roomIdleTimeout});
+
+  final Duration roomIdleTimeout;
 
   /// Where this account's room logs are stored.
   final Directory directory;
@@ -304,9 +329,12 @@ class _UserNotes {
 
   File get _indexFile => File('${directory.path}/notes.json');
 
-  static Future<_UserNotes> open(Directory directory) async {
+  static Future<_UserNotes> open(
+    Directory directory, {
+    required Duration roomIdleTimeout,
+  }) async {
     await directory.create(recursive: true);
-    final notes = _UserNotes._(directory);
+    final notes = _UserNotes._(directory, roomIdleTimeout: roomIdleTimeout);
     if (notes._indexFile.existsSync()) {
       final json = jsonDecode(
         await notes._indexFile.readAsString(),
@@ -349,11 +377,24 @@ class _UserNotes {
           _deleted.remove(path);
           await _saveIndex();
         }
-        return _rooms.putIfAbsent(
-          path,
-          () => _Room.open(path, _logFileFor(path)),
-        );
+        return _rooms.putIfAbsent(path, () async {
+          final room = await _Room.open(path, _logFileFor(path));
+          room
+            ..idleTimeout = roomIdleTimeout
+            ..onIdle = () => _unload(path, room);
+          return room;
+        });
       });
+
+  /// Frees the memory of a room that no device has open.
+  Future<void> _unload(String path, _Room room) => _synchronized(() async {
+    if (!room.isIdle) return;
+    final loaded = _rooms[path];
+    if (loaded == null || await loaded != room) return;
+    _rooms.remove(path);
+    _closedHeads[path] = room.head;
+    await room.close();
+  });
 
   /// Records that the note at [path] has operations.
   Future<void> markAsWritten(String path) async {
@@ -427,9 +468,22 @@ class _Room {
   /// The path of the note in the user's library.
   final String path;
 
-  /// The operations of this room in order, each as it's sent to devices.
+  /// Where each operation of this room is in its log file, in order.
   /// The operation at index `i` has the sequence number `i + 1`.
-  final _frames = <Uint8List>[];
+  ///
+  /// The operations themselves stay on disk, since they include the images
+  /// of the note, and are read when a device needs to catch up.
+  final _offsets = <({int start, int length})>[];
+
+  /// The operations that were appended recently, by sequence number,
+  /// which devices that were briefly offline are likely to ask for.
+  final _recentFrames = <int, Uint8List>{};
+  static const _maxRecentFrames = 256;
+  var _recentBytes = 0;
+  static const _maxRecentBytes = 4 * 1024 * 1024;
+
+  /// Where the next operation goes in the log file.
+  var _logLength = 0;
 
   /// The id of the last operation received from each device,
   /// used to ignore operations that a device sends twice.
@@ -438,7 +492,30 @@ class _Room {
   final RandomAccessFile _log;
   final clients = <_Client>{};
 
-  int get head => _frames.length;
+  /// How long a room stays loaded after its last device has left.
+  var idleTimeout = const Duration(minutes: 5);
+  Timer? _idleTimer;
+
+  /// Called when no device has had this room open for [idleTimeout].
+  void Function()? onIdle;
+
+  /// How many devices are catching up before joining [clients].
+  var joining = 0;
+
+  bool get isIdle => clients.isEmpty && joining == 0;
+
+  void leave(_Client client) {
+    if (!clients.remove(client) || clients.isNotEmpty) return;
+    _idleTimer?.cancel();
+    _idleTimer = Timer(idleTimeout, () => onIdle?.call());
+  }
+
+  void cancelIdleClose() {
+    _idleTimer?.cancel();
+    _idleTimer = null;
+  }
+
+  int get head => _offsets.length;
 
   /// Returns how many operations are in the log [file], without loading them.
   static Future<int> countOperations(File file) async {
@@ -462,38 +539,66 @@ class _Room {
   }
 
   static Future<_Room> open(String path, File file) async {
+    if (!file.existsSync()) await file.create(recursive: true);
     final room = _Room._(path, await file.open(mode: FileMode.append));
 
     // Each entry is a 4 byte length followed by the frame.
-    final bytes = await file.readAsBytes();
-    final view = ByteData.sublistView(bytes);
-    var offset = 0;
-    while (offset + 4 <= bytes.length) {
-      final length = view.getUint32(offset);
-      if (offset + 4 + length > bytes.length) break; // partial write
-      final frame = Uint8List.sublistView(
-        bytes,
-        offset + 4,
-        offset + 4 + length,
-      );
-      final Map<String, dynamic> message = BsonCodec.deserialize(
-        BsonBinary.from(frame),
-      );
-      room._frames.add(frame);
-      room._lastOpIds[message['from'] as String] = _int(message['cid']);
-      room._recordText(
-        message['d'],
-        seq: room._frames.length,
-        from: message['from'] as String,
-      );
-      offset += 4 + length;
+    // The log is read one entry at a time so that a note
+    // with large images doesn't have to fit in memory.
+    final reader = await file.open();
+    try {
+      final length = await reader.length();
+      var offset = 0;
+      while (offset + 4 <= length) {
+        await reader.setPosition(offset);
+        final header = await reader.read(4);
+        final frameLength = ByteData.sublistView(header).getUint32(0);
+        if (offset + 4 + frameLength > length) break; // partial write
+        room._offsets.add((start: offset + 4, length: frameLength));
+
+        final Map<String, dynamic> message = BsonCodec.deserialize(
+          BsonBinary.from(await reader.read(frameLength)),
+        );
+        room._lastOpIds[message['from'] as String] = _int(message['cid']);
+        room._recordText(
+          message['d'],
+          seq: room._offsets.length,
+          from: message['from'] as String,
+        );
+        offset += 4 + frameLength;
+      }
+      room._logLength = offset;
+      if (offset != length) await room._log.truncate(offset);
+    } finally {
+      await reader.close();
     }
-    if (offset != bytes.length) await room._log.truncate(offset);
 
     return room;
   }
 
-  Iterable<Uint8List> framesAfter(int seq) => _frames.skip(seq.clamp(0, head));
+  /// Returns the operations that follow the one numbered [seq].
+  ///
+  /// Stops at the operations that were appended while it was reading.
+  Stream<Uint8List> framesAfter(int seq, {required int end}) async* {
+    seq = seq.clamp(0, end);
+    RandomAccessFile? reader;
+    try {
+      for (var i = seq; i < end; ++i) {
+        if (_recentFrames[i + 1] case final frame?) {
+          yield frame;
+          continue;
+        }
+        reader ??= await _logFile.open();
+        final (:start, :length) = _offsets[i];
+        await reader.setPosition(start);
+        yield await reader.read(length);
+      }
+    } finally {
+      await reader?.close();
+    }
+  }
+
+  File get _logFile => File(_log.path);
 
   /// The last queued [append], so that operations from
   /// different devices are numbered one at a time.
@@ -535,7 +640,9 @@ class _Room {
     await _log.writeFrom(entry.takeBytes());
     await _log.flush();
 
-    _frames.add(frame);
+    _offsets.add((start: _logLength + 4, length: frame.length));
+    _logLength += 4 + frame.length;
+    _remember(seq, frame);
     _lastOpIds[sender.id] = cid;
 
     sender.send({'k': 'ack', 'cid': cid, 'seq': seq});
@@ -543,6 +650,16 @@ class _Room {
       if (client == sender) continue;
       if (client.socket.readyState != WebSocket.open) continue;
       client.socket.add(frame);
+    }
+  }
+
+  void _remember(int seq, Uint8List frame) {
+    _recentFrames[seq] = frame;
+    _recentBytes += frame.length;
+    while (_recentFrames.length > _maxRecentFrames ||
+        _recentBytes > _maxRecentBytes) {
+      final oldest = _recentFrames.keys.first;
+      _recentBytes -= _recentFrames.remove(oldest)!.length;
     }
   }
 
@@ -588,7 +705,7 @@ class _Room {
         }
       }
       text.document = text.document.compose(change);
-      text.changes.add((seq: seq, from: from, delta: change));
+      text.addChange(seq: seq, from: from, delta: change);
       return {'t': _textDeltaType, 'pg': pageId, 'd': change.toJson()};
     } catch (e) {
       stderr.writeln('Dropped a change to the text of page $pageId: $e');
@@ -605,13 +722,14 @@ class _Room {
       final change = Delta.fromJson(op['d'] as List);
       final text = _texts.putIfAbsent(pageId, _PageText.new);
       text.document = text.document.compose(change);
-      text.changes.add((seq: seq, from: from, delta: change));
+      text.addChange(seq: seq, from: from, delta: change);
     } catch (e) {
       stderr.writeln('Invalid text change in the log of $path: $e');
     }
   }
 
   Future<void> close() async {
+    cancelIdleClose();
     // Don't wait for the devices to confirm, since one that has
     // stopped responding would keep the server from stopping.
     for (final client in clients.toList()) {
@@ -629,4 +747,20 @@ class _PageText {
   var document = Delta()..insert('\n');
 
   final changes = <({int seq, String from, Delta delta})>[];
+
+  /// How many recent changes are kept to merge late changes with.
+  /// A device that was offline for longer than that has its change applied
+  /// on top of the text as it is, which can put it slightly off place.
+  static const _maxChanges = 500;
+
+  void addChange({
+    required int seq,
+    required String from,
+    required Delta delta,
+  }) {
+    changes.add((seq: seq, from: from, delta: delta));
+    if (changes.length > _maxChanges) {
+      changes.removeRange(0, changes.length - _maxChanges);
+    }
+  }
 }

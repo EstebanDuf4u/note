@@ -95,6 +95,7 @@ abstract final class NoteOps {
   static const colorStrokesType = 'cs';
   static const insertPageType = 'ip';
   static const deletePageType = 'dp';
+  static const movePageType = 'mp';
   static const backgroundPatternType = 'bg';
   static const assetChunkType = 'ac';
   static const addImageType = 'ai';
@@ -143,6 +144,14 @@ abstract final class NoteOps {
   static NoteOp deletePage(EditorPage page) => {
     't': deletePageType,
     'id': page.id,
+  };
+
+  /// Moves [page] so that it follows the page with id [afterPageId],
+  /// or to the start of the note if [afterPageId] is null.
+  static NoteOp movePage(EditorPage page, {required String? afterPageId}) => {
+    't': movePageType,
+    'id': page.id,
+    'after': afterPageId,
   };
 
   static NoteOp backgroundPattern(CanvasBackgroundPattern pattern) => {
@@ -540,6 +549,8 @@ class NoteOpApplier {
         coreInfo.pages.removeAt(index).dispose();
         _updatePageIndices(from: index);
         _ensureBlankLastPage();
+      case NoteOps.movePageType:
+        _movePage(op);
       case NoteOps.backgroundPatternType:
         final overridden = pendingLocalOps.any(
           (pending) => pending['t'] == NoteOps.backgroundPatternType,
@@ -829,6 +840,28 @@ class NoteOpApplier {
     _updatePageIndices(from: index);
     onPageInserted?.call(page, index);
     _ensureBlankLastPage();
+  }
+
+  void _movePage(NoteOp op) {
+    final from = _indexOfPage(op['id'] as String);
+    if (from < 0) return;
+    // the blank page at the end stays at the end
+    if (from == coreInfo.pages.length - 1 && coreInfo.pages[from].isEmpty) {
+      return;
+    }
+    final page = coreInfo.pages.removeAt(from);
+
+    final after = op['after'] as String?;
+    var to = 0;
+    if (after != null) {
+      final afterIndex = _indexOfPage(after);
+      to = afterIndex < 0 ? coreInfo.pages.length : afterIndex + 1;
+    }
+    // never after the blank page at the end
+    final last = coreInfo.pages.length - 1;
+    if (to > last && last >= 0 && coreInfo.pages[last].isEmpty) to = last;
+    coreInfo.pages.insert(to, page);
+    _updatePageIndices(from: min(from, to));
   }
 
   /// Returns the index of the page with id [pageId],

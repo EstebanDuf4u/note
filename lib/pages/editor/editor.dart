@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show min;
 
 import 'package:collapsible/collapsible.dart';
 import 'package:file_picker/file_picker.dart';
@@ -2235,9 +2236,36 @@ class EditorState extends State<Editor> {
         );
         autosaveAfterDelay();
       }),
+      movePage: movePage,
       transformationController: _transformationController,
     );
   }
+
+  /// Moves the page at [oldIndex] so that it ends up at [newIndex].
+  void movePage(int oldIndex, int newIndex) => setState(() {
+    if (coreInfo.readOnly) return;
+    final pages = coreInfo.pages;
+    // the blank page at the end stays at the end
+    final lastIndex = pages.length - 1;
+    if (oldIndex == lastIndex && pages[lastIndex].isEmpty) return;
+    if (newIndex >= lastIndex && pages[lastIndex].isEmpty) {
+      newIndex = lastIndex - 1;
+    }
+    if (oldIndex == newIndex) return;
+
+    final page = pages.removeAt(oldIndex);
+    pages.insert(newIndex, page);
+    for (int i = min(oldIndex, newIndex); i < pages.length; i++) {
+      pages[i].updatePageIndex(i);
+    }
+    _submitOps([
+      NoteOps.movePage(
+        page,
+        afterPageId: newIndex > 0 ? pages[newIndex - 1].id : null,
+      ),
+    ]);
+    _saveChangeOutsideHistory();
+  });
 
   void insertPageAfter(int pageIndex) => setState(() {
     if (coreInfo.readOnly) return;

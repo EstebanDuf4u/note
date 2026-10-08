@@ -603,6 +603,32 @@ void main() {
       expect(b.contents, a.contents);
     });
 
+    test('moving a page', () {
+      final a = _Device('a'), b = _Device('b');
+      a.draw(0);
+      a.draw(1, at: const Offset(5, 5));
+      a.draw(2, at: const Offset(9, 9));
+      b.receive(NoteOps.snapshot(a.coreInfo));
+      expect(b.contents, a.contents);
+
+      // move the last drawn page to the start, then the first to the end
+      for (final (from, to) in [(2, 0), (0, 2)]) {
+        final page = a.pages.removeAt(from);
+        a.pages.insert(to, page);
+        for (int i = 0; i < a.pages.length; i++) {
+          a.pages[i].updatePageIndex(i);
+        }
+        b.receive([
+          NoteOps.movePage(
+            page,
+            afterPageId: to > 0 ? a.pages[to - 1].id : null,
+          ),
+        ]);
+        expect(b.contents, a.contents);
+      }
+      expect(b.pages.last.isEmpty, isTrue);
+    });
+
     test('a page is inserted while another device draws', () {
       final a = _Device('a'), b = _Device('b');
       a.draw(0);
