@@ -10,6 +10,9 @@ export const PAGE_WIDTH = 1000;
 export const PAGE_HEIGHT = 1400;
 export const FIRST_PAGE_ID = 'p0';
 
+/** Pictures are sent in pieces of this many bytes, like in the app. */
+const ASSET_CHUNK = 512 * 1024;
+
 /** The tools, by the id that the app gives them. */
 export const Tools = {
   fountainPen: 'fountainPen',
@@ -446,6 +449,7 @@ export class Note {
         const m = op.m;
         if (this.findImage(m.u)[1]) return;
         const bytes = this.assets.complete.get(op.h);
+        if (!bytes) console.warn('Image added without its picture', m.u);
         const page = this.materializePage(op.pg);
         const image = {
           uid: m.u,
@@ -462,7 +466,9 @@ export class Note {
           sw: m.sw ?? 0,
           sh: m.sh ?? 0,
           invertible: m.v ?? true,
-          fit: m.f ?? 0,
+          fit: m.f ?? 1,
+          nw: m.nw ?? 0,
+          nh: m.nh ?? 0,
         };
         if (op.bg) page.backgroundImage = image;
         else page.images.push(image);
@@ -565,4 +571,57 @@ export const Ops = {
   bookmark: (page) => ({ t: 'bm', pg: page.id, b: page.bookmark }),
   flashcards: (on) => ({ t: 'fl', on }),
   study: (page) => ({ t: 'fc', pg: page.id, c: page.study }),
+
+  /** The operations that add `image` to `page`, with its picture. */
+  addImage(page, image, { sendAsset = true } = {}) {
+    const ops = [];
+    if (sendAsset) {
+      const count = Math.max(1, Math.ceil(image.bytes.length / ASSET_CHUNK));
+      for (let i = 0; i < count; i++) {
+        ops.push({
+          t: 'ac',
+          h: image.hash,
+          i: int(i),
+          n: int(count),
+          b: image.bytes.subarray(i * ASSET_CHUNK, Math.min(image.bytes.length, (i + 1) * ASSET_CHUNK)),
+        });
+      }
+    }
+    ops.push({
+      t: 'ai',
+      pg: page.id,
+      bg: page.backgroundImage === image,
+      h: image.hash,
+      n: int(image.bytes.length),
+      m: {
+        u: image.uid,
+        e: image.extension,
+        v: image.invertible,
+        f: int(image.fit ?? 1),
+        x: image.x,
+        y: image.y,
+        w: image.w,
+        h: image.h,
+        ...(image.nw ? { nw: image.nw, nh: image.nh } : {}),
+      },
+    });
+    return ops;
+  },
+  removeImages: (images) => ({ t: 'ri', ids: images.map((image) => image.uid) }),
+  /** Where and how `image` is shown, `rect` being its position then. */
+  updateImage: (page, image, rect = image) => ({
+    t: 'ui',
+    id: image.uid,
+    bg: page.backgroundImage === image,
+    x: rect.x,
+    y: rect.y,
+    w: rect.w,
+    h: rect.h,
+    sx: image.sx ?? 0,
+    sy: image.sy ?? 0,
+    sw: image.sw ?? 0,
+    sh: image.sh ?? 0,
+    v: image.invertible ?? true,
+    f: int(image.fit ?? 1),
+  }),
 };

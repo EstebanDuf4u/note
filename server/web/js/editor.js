@@ -5,6 +5,8 @@ import { deserialize, serialize } from './bson.js';
 import {
   boundsOfAll,
   erasedAround,
+  imageAt,
+  imagesInLasso,
   isStraightLine,
   straighten,
   strokesInLasso,
@@ -12,8 +14,9 @@ import {
 } from './geometry.js';
 import { copyShareLink, errorMessage, PAPERS } from './library.js';
 import { Note, Ops, Page, Stroke, Tools, newId } from './model.js';
-import { boundsOf, cssColor, drawPage, drawStroke, smoothPath, strokePolygon } from './render.js';
+import { boundsOf, cssColor, drawImage, drawPage, drawStroke, smoothPath, strokePolygon } from './render.js';
 import { Session } from './session.js';
+import { base64Url, sha256 } from './sha256.js';
 import { study } from './study.js';
 import { colorOf, confirm, h, icon, initials, prompt, sheet, toast } from './ui.js';
 
@@ -866,7 +869,12 @@ export class Editor {
       }
       if (this.selection?.page === page) {
         // while they move, they're left out of the page's picture
-        if (this.hidden) for (const stroke of this.selection.strokes) drawStroke(ctx, stroke);
+        if (this.hidden) {
+          for (const image of this.selection.images) {
+            drawImage(ctx, this.note, page, image, () => this.requestFrame(), false);
+          }
+          for (const stroke of this.selection.strokes) drawStroke(ctx, stroke);
+        }
         this.drawSelection(ctx, z);
       }
       if (this.lasso?.page === page) this.drawLasso(ctx, z);
@@ -1233,12 +1241,18 @@ export class Editor {
         const y = wy - top;
         const handleDistance = Math.hypot(x - b.right, y - b.bottom) * this.camera.z;
         if (handleDistance <= HANDLE_RADIUS) {
-          this.gesture = { kind: 'resize', pointerId: e.pointerId, byTouch, anchor: [b.left, b.top], start: [b.right, b.bottom], factor: 1 };
+          this.gesture = {
+            kind: 'resize', pointerId: e.pointerId, byTouch, anchor: [b.left, b.top], start: [b.right, b.bottom], factor: 1,
+            rects: this.selection.images.map((image) => ({ x: image.x, y: image.y, w: image.w, h: image.h })),
+          };
           this.hideSelectionBar();
           return;
         }
         if (x >= b.left - 8 && x <= b.right + 8 && y >= b.top - 8 && y <= b.bottom + 8) {
-          this.gesture = { kind: 'move', pointerId: e.pointerId, byTouch, last: [x, y], dx: 0, dy: 0 };
+          this.gesture = {
+            kind: 'move', pointerId: e.pointerId, byTouch, last: [x, y], dx: 0, dy: 0,
+            rects: this.selection.images.map((image) => ({ x: image.x, y: image.y, w: image.w, h: image.h })),
+          };
           this.moving = true;
           this.hideSelectionBar();
           return;
@@ -1246,6 +1260,18 @@ export class Editor {
       }
       this.clearSelection();
       if (!hit) return;
+      // a photo is picked up directly
+      const image = imageAt(hit.page.images, hit.x, hit.y);
+      if (image) {
+        this.select(hit.page, [], [image]);
+        this.gesture = {
+          kind: 'move', pointerId: e.pointerId, byTouch, last: [hit.x, hit.y], dx: 0, dy: 0,
+          rects: [{ x: image.x, y: image.y, w: image.w, h: image.h }],
+        };
+        this.moving = true;
+        this.hideSelectionBar();
+        return;
+      }
       this.lasso = { page: hit.page, points: [[hit.x, hit.y]] };
       this.gesture = { kind: 'lasso', pointerId: e.pointerId, byTouch };
       return;
@@ -1337,8 +1363,12 @@ export class Editor {
         gesture.dx += dx;
         gesture.dy += dy;
         for (const stroke of this.selection.strokes) stroke.shift(dx, dy);
-        this.selection.bounds = boundsOfAll(this.selection.strokes);
-        this.hidden = new Set(this.selection.strokes);
+        for (const image of this.selection.images) {
+          image.x += dx;
+          image.y += dy;
+        }
+        this.selection.bounds = boundsOfAll(this.selection.strokes, this.selection.images);
+        this.hidden = new Set([...this.selection.strokes, ...this.selection.images]);
         this.hiddenKey = 'move';
         break;
       }
@@ -1351,9 +1381,18 @@ export class Editor {
         const lengthSquared = start[0] ** 2 + start[1] ** 2 || 1;
         const factor = Math.max(0.05, Math.min(20, (current[0] * start[0] + current[1] * start[1]) / lengthSquared));
         for (const stroke of this.selection.strokes) stroke.scale(ax, ay, factor / gesture.factor);
+        this.selection.images.forEach((image, i) => {
+          const r = gesture.rects[i];
+          Object.assign(image, {
+            x: ax + (r.x - ax) * factor,
+            y: ay + (r.y - ay) * factor,
+            w: r.w * factor,
+            h: r.h * factor,
+          });
+        });
         gesture.factor = factor;
-        this.selection.bounds = boundsOfAll(this.selection.strokes);
-        this.hidden = new Set(this.selection.strokes);
+        this.selection.bounds = boundsOfAll(this.selection.strokes, this.selection.images);
+        this.hidden = new Set([...this.selection.strokes, ...this.selection.images]);
         this.hiddenKey = 'resize';
         break;
       }
@@ -1410,10 +1449,8 @@ export class Editor {
         this.lasso = null;
         if (points.length < 3) break;
         const strokes = strokesInLasso(page.strokes, points);
-        if (strokes.length) {
-          this.selection = { page, strokes, bounds: boundsOfAll(strokes) };
-          this.showSelectionBar();
-        }
+        const images = imagesInLasso(page.images, points);
+        if (strokes.length || images.length) this.select(page, strokes, images);
         break;
       }
       case 'move': {
@@ -1421,11 +1458,17 @@ export class Editor {
         this.hidden = null;
         this.hiddenKey = null;
         this.selection.page.changed();
-        const { strokes } = this.selection;
+        const { page, strokes, images } = this.selection;
         if (Math.abs(gesture.dx) + Math.abs(gesture.dy) > 0.01) {
           this.commit(
-            [Ops.moveStrokes(strokes, gesture.dx, gesture.dy)],
-            [Ops.moveStrokes(strokes, -gesture.dx, -gesture.dy)],
+            [
+              ...(strokes.length ? [Ops.moveStrokes(strokes, gesture.dx, gesture.dy)] : []),
+              ...images.map((image) => Ops.updateImage(page, image)),
+            ],
+            [
+              ...(strokes.length ? [Ops.moveStrokes(strokes, -gesture.dx, -gesture.dy)] : []),
+              ...images.map((image, i) => Ops.updateImage(page, image, gesture.rects[i])),
+            ],
           );
         }
         this.showSelectionBar();
@@ -1435,12 +1478,18 @@ export class Editor {
         this.hidden = null;
         this.hiddenKey = null;
         this.selection.page.changed();
-        const { strokes } = this.selection;
+        const { page, strokes, images } = this.selection;
         const [ax, ay] = gesture.anchor;
         if (gesture.factor !== 1) {
           this.commit(
-            [Ops.scaleStrokes(strokes, ax, ay, gesture.factor)],
-            [Ops.scaleStrokes(strokes, ax, ay, 1 / gesture.factor)],
+            [
+              ...(strokes.length ? [Ops.scaleStrokes(strokes, ax, ay, gesture.factor)] : []),
+              ...images.map((image) => Ops.updateImage(page, image)),
+            ],
+            [
+              ...(strokes.length ? [Ops.scaleStrokes(strokes, ax, ay, 1 / gesture.factor)] : []),
+              ...images.map((image, i) => Ops.updateImage(page, image, gesture.rects[i])),
+            ],
           );
         }
         this.showSelectionBar();
@@ -1505,7 +1554,9 @@ export class Editor {
     this.selectionBar = h(
       'div.selection-bar',
       {},
-      h('button', { onclick: () => this.recolorSelection() }, icon('palette'), 'Couleur'),
+      this.selection?.strokes.length
+        ? h('button', { onclick: () => this.recolorSelection() }, icon('palette'), 'Couleur')
+        : null,
       h('button', { onclick: () => this.duplicateSelection() }, icon('copy'), 'Dupliquer'),
       h('button', { onclick: () => this.deleteSelection() }, icon('trash'), 'Supprimer'),
     );
@@ -1526,27 +1577,58 @@ export class Editor {
     this.selectionBar.style.top = y + 'px';
   }
 
+  /** Selects `strokes` and `images` of `page`, to move or change them. */
+  select(page, strokes, images = []) {
+    this.selection = { page, strokes, images, bounds: boundsOfAll(strokes, images) };
+    this.showSelectionBar();
+    this.requestFrame();
+  }
+
   deleteSelection() {
-    const { page, strokes } = this.selection;
+    const { page, strokes, images } = this.selection;
     for (const stroke of strokes) page.strokes.splice(page.strokes.indexOf(stroke), 1);
+    for (const image of images) page.images.splice(page.images.indexOf(image), 1);
     page.changed();
     this.clearSelection();
     this.note.ensureBlankLastPage();
-    this.commit([Ops.removeStrokes(strokes)], strokes.map((stroke) => Ops.addStroke(page, stroke)));
+    const ops = [];
+    const inverse = [];
+    if (strokes.length) {
+      ops.push(Ops.removeStrokes(strokes));
+      inverse.push(...strokes.map((stroke) => Ops.addStroke(page, stroke)));
+    }
+    if (images.length) {
+      ops.push(Ops.removeImages(images));
+      // the other devices already have their pictures
+      inverse.push(...images.flatMap((image) => Ops.addImage(page, image, { sendAsset: false })));
+    }
+    this.commit(ops, inverse);
   }
 
   duplicateSelection() {
-    const { page, strokes } = this.selection;
+    const { page, strokes, images } = this.selection;
     const copies = strokes.map((stroke) => {
       const copy = stroke.copy({ id: newId() });
       copy.shift(24, 24);
       page.insertStroke(copy);
       return copy;
     });
-    this.commit(copies.map((stroke) => Ops.addStroke(page, stroke)), [Ops.removeStrokes(copies)]);
-    this.selection = { page, strokes: copies, bounds: boundsOfAll(copies) };
-    this.showSelectionBar();
-    this.requestFrame();
+    const imageCopies = images.map((image) => {
+      const copy = { ...image, uid: newId(), x: image.x + 24, y: image.y + 24 };
+      page.images.push(copy);
+      return copy;
+    });
+    page.changed();
+    const ops = [
+      ...copies.map((stroke) => Ops.addStroke(page, stroke)),
+      ...imageCopies.flatMap((image) => Ops.addImage(page, image, { sendAsset: false })),
+    ];
+    const inverse = [
+      ...(copies.length ? [Ops.removeStrokes(copies)] : []),
+      ...(imageCopies.length ? [Ops.removeImages(imageCopies)] : []),
+    ];
+    this.commit(ops, inverse);
+    this.select(page, copies, imageCopies);
   }
 
   async recolorSelection() {
@@ -1615,6 +1697,7 @@ export class Editor {
       h(
         'div.menu',
         {},
+        h('button', { onclick: () => close('photo') }, icon('photo'), 'Ajouter une photo'),
         h('button', { onclick: () => close('pages') }, icon('pages'), 'Pages et sommaire'),
         h('button', { onclick: () => close('add') }, icon('plus'), 'Ajouter une page', h('span.hint', {}, `après la ${index + 1}`)),
         h('button', { onclick: () => close('bookmark') }, icon('bookmark', { filled: bookmarked }), bookmarked ? 'Retirer le signet' : 'Ajouter un signet'),
@@ -1635,6 +1718,7 @@ export class Editor {
         h('button', { onclick: () => close('fit') }, icon('notebook'), 'Ajuster à la largeur'),
       ),
     ]);
+    if (choice === 'photo') this.pickPhoto();
     if (choice === 'pages') this.showPages();
     if (choice === 'add') this.addPageAfter(index);
     if (choice === 'bookmark') this.toggleBookmark(index);
@@ -1643,6 +1727,80 @@ export class Editor {
     if (choice === 'study') this.study();
     if (choice === 'share') copyShareLink(this.options.path);
     if (choice === 'fit') this.fitWidth();
+  }
+
+  /** Lets the user add a photo, from the camera or their library. */
+  pickPhoto() {
+    const input = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (!file) return;
+      try {
+        await this.addPhoto(file);
+      } catch (e) {
+        console.error(e);
+        toast("Cette image n'a pas pu être ajoutée.");
+      }
+    });
+    document.body.append(input);
+    input.click();
+  }
+
+  async addPhoto(file) {
+    const url = URL.createObjectURL(file);
+    const picture = new Image();
+    picture.src = url;
+    await picture.decode();
+    // a photo from a phone is shrunk so that it syncs quickly
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(picture.naturalWidth, picture.naturalHeight));
+    const width = Math.round(picture.naturalWidth * scale);
+    const height = Math.round(picture.naturalHeight * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; // transparent pictures get a white background as a jpeg
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(picture, 0, 0, width, height);
+    URL.revokeObjectURL(url);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+
+    const index = this.currentPageIndex;
+    const page = this.note.pages[index];
+    const w = Math.min(page.width * 0.7, width);
+    const h = (w * height) / width;
+    // in the middle of what's on screen
+    const [, cy] = this.toWorld(this.width / 2, this.height / 2);
+    const y = Math.max(20, Math.min(page.height - h - 20, cy - this.pageOffset(page) - h / 2));
+    const image = {
+      uid: newId(),
+      extension: '.jpg',
+      hash: base64Url(sha256(bytes)),
+      bytes,
+      x: (page.width - w) / 2,
+      y,
+      w,
+      h,
+      sx: 0,
+      sy: 0,
+      sw: 0,
+      sh: 0,
+      nw: width,
+      nh: height,
+      invertible: false,
+      fit: 1,
+    };
+    this.note.assets.complete.set(image.hash, bytes);
+    page.images.push(image);
+    page.changed();
+    this.note.ensureBlankLastPage();
+    this.commit(Ops.addImage(page, image), [Ops.removeImages([image])]);
+    this.setTool('lasso');
+    this.select(page, [], [image]);
+    toast('Photo ajoutée · glissez-la pour la placer');
   }
 
   toggleFlashcards() {

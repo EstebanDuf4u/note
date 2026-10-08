@@ -162,9 +162,42 @@ export function strokesInLasso(strokes, polygon) {
   });
 }
 
-/** The box around `strokes`. */
-export function boundsOfAll(strokes) {
+/** The images that are mostly inside the lasso `polygon`, like the app. */
+export function imagesInLasso(images, polygon) {
+  const lasso = new Path2D();
+  polygon.forEach(([x, y], i) => (i ? lasso.lineTo(x, y) : lasso.moveTo(x, y)));
+  lasso.closePath();
+  const ctx = hitContext();
+  return images.filter((image) => {
+    let inside = 0;
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 5; j++) {
+        if (ctx.isPointInPath(lasso, image.x + (image.w * i) / 4, image.y + (image.h * j) / 4)) inside++;
+      }
+    }
+    // the grid isn't very precise, so it counts a bit more, like the app
+    return (inside / 25) * 1.25 >= 0.7;
+  });
+}
+
+/** The image of `images` at (x, y), the topmost first. */
+export function imageAt(images, x, y) {
+  for (let i = images.length - 1; i >= 0; i--) {
+    const image = images[i];
+    if (x >= image.x && x <= image.x + image.w && y >= image.y && y <= image.y + image.h) return image;
+  }
+  return null;
+}
+
+/** The box around `strokes` and `images`. */
+export function boundsOfAll(strokes, images = []) {
   const result = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+  for (const image of images) {
+    result.left = Math.min(result.left, image.x);
+    result.top = Math.min(result.top, image.y);
+    result.right = Math.max(result.right, image.x + image.w);
+    result.bottom = Math.max(result.bottom, image.y + image.h);
+  }
   for (const stroke of strokes) {
     const b = boundsOf(stroke);
     result.left = Math.min(result.left, b.left);
