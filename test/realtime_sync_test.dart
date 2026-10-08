@@ -661,6 +661,26 @@ void main() {
       expect(b.contents, before);
     });
 
+    test('bookmarks', () {
+      final a = _Device('a'), b = _Device('b');
+      a.draw(0);
+      a.draw(1);
+      b.receive(NoteOps.snapshot(a.coreInfo));
+
+      a.pages[1].bookmark = 'Chapitre 2';
+      b.receive([NoteOps.bookmark(a.pages[1])]);
+      expect(b.pages[1].bookmark, 'Chapitre 2');
+
+      // a new device gets them with the rest of the note
+      final c = _Device('c')..receive(NoteOps.snapshot(a.coreInfo));
+      expect(c.pages[1].bookmark, 'Chapitre 2');
+      expect(c.pages[0].bookmark, isNull);
+
+      a.pages[1].bookmark = null;
+      b.receive([NoteOps.bookmark(a.pages[1])]);
+      expect(b.pages[1].bookmark, isNull);
+    });
+
     test('moving a page', () {
       final a = _Device('a'), b = _Device('b');
       a.draw(0);

@@ -283,6 +283,7 @@ class _Translations$editor$fr extends Translations$editor$en {
 	@override String get turnPages => 'Tourner les pages une à une';
 	@override String get scrollContinuously => 'Faire défiler les pages';
 	@override String get closeTab => 'Fermer l\'onglet';
+	@override late final _Translations$editor$bookmarks$fr bookmarks = _Translations$editor$bookmarks$fr._(_root);
 	@override String get pagePanel => 'Miniatures des pages';
 	@override late final _Translations$editor$realtime$fr realtime = _Translations$editor$realtime$fr._(_root);
 	@override late final _Translations$editor$toolbar$fr toolbar = _Translations$editor$toolbar$fr._(_root);
@@ -802,6 +803,22 @@ class _Translations$editor$flashcards$fr extends Translations$editor$flashcards$
 	@override String days({required Object n}) => '${n} j';
 	@override String months({required Object n}) => '${n} mois';
 	@override String years({required Object n}) => '${n} an(s)';
+}
+
+// Path: editor.bookmarks
+class _Translations$editor$bookmarks$fr extends Translations$editor$bookmarks$en {
+	_Translations$editor$bookmarks$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get contents => 'Sommaire';
+	@override String get add => 'Ajouter un signet à cette page';
+	@override String get remove => 'Retirer le signet';
+	@override String get edit => 'Renommer le signet';
+	@override String get title => 'Titre du signet';
+	@override String page({required Object n}) => 'Page ${n}';
+	@override String get empty => 'Aucun signet pour l\'instant. Ajoutez-en un avec le ruban en haut pour retrouver la page ici.';
 }
 
 // Path: editor.realtime

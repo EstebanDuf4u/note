@@ -64,6 +64,10 @@ class EditorPage extends ChangeNotifier implements HasSize {
   /// or null if it has never been studied.
   StudyState? study;
 
+  /// The title of this page in the note's table of contents,
+  /// empty for an untitled bookmark, or null if it isn't bookmarked.
+  String? bookmark;
+
   EditorImage? backgroundImage;
 
   bool get isEmpty =>
@@ -125,6 +129,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     this.backgroundImage,
     this.id = '',
     this.study,
+    this.bookmark,
   }) : assert(
          (size == null) || (width == null && height == null),
          "size and width/height shouldn't both be specified",
@@ -154,6 +159,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     return EditorPage(
       id: json['id'] as String? ?? '',
       study: json['fc'] != null ? StudyState.fromJson(json['fc'] as Map) : null,
+      bookmark: json['bm'] as String?,
       size: size,
       strokes: parseStrokesJson(
         json['s'] as List?,
@@ -202,6 +208,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
       'q': quill.controller.document.toDelta().toJson(),
     if (backgroundImage != null) 'b': backgroundImage?.toJson(assets),
     if (study != null) 'fc': study!.toJson(),
+    if (bookmark != null) 'bm': bookmark,
   };
 
   /// Inserts a stroke, while keeping the strokes sorted by

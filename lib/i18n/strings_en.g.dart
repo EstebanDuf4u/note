@@ -454,6 +454,8 @@ class Translations$editor$en {
 	/// en: 'Close tab'
 	String get closeTab => 'Close tab';
 
+	late final Translations$editor$bookmarks$en bookmarks = Translations$editor$bookmarks$en.internal(_root);
+
 	/// en: 'Page thumbnails'
 	String get pagePanel => 'Page thumbnails';
 
@@ -1344,6 +1346,36 @@ class Translations$editor$flashcards$en {
 
 	/// en: '$n y'
 	String years({required Object n}) => '${n} y';
+}
+
+// Path: editor.bookmarks
+class Translations$editor$bookmarks$en {
+	Translations$editor$bookmarks$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Contents'
+	String get contents => 'Contents';
+
+	/// en: 'Bookmark this page'
+	String get add => 'Bookmark this page';
+
+	/// en: 'Remove the bookmark'
+	String get remove => 'Remove the bookmark';
+
+	/// en: 'Rename the bookmark'
+	String get edit => 'Rename the bookmark';
+
+	/// en: 'Bookmark title'
+	String get title => 'Bookmark title';
+
+	/// en: 'Page $n'
+	String page({required Object n}) => 'Page ${n}';
+
+	/// en: 'No bookmarks yet. Bookmark a page with the ribbon at the top to list it here.'
+	String get empty => 'No bookmarks yet. Bookmark a page with the ribbon at the top to list it here.';
 }
 
 // Path: editor.realtime
