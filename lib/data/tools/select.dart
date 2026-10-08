@@ -139,6 +139,44 @@ class SelectResult {
     return strokes.isEmpty && images.isEmpty;
   }
 
+  /// The smallest rectangle around the selected strokes and images.
+  Rect get bounds {
+    Rect? bounds;
+    for (final rect in [
+      for (final stroke in strokes) stroke.lowQualityPath.getBounds(),
+      for (final image in images) image.dstRect,
+    ]) {
+      bounds = bounds?.expandToInclude(rect) ?? rect;
+    }
+    return bounds ?? .zero;
+  }
+
+  /// How far from [resizeHandle] a touch still grabs it.
+  static const resizeHandleRadius = 24.0;
+
+  /// Where the handle that resizes the selection is.
+  Offset get resizeHandle => bounds.bottomRight;
+
+  /// Scales the selected strokes and images (and the selection itself)
+  /// by [factor] around [anchor].
+  void scale(Offset anchor, double factor) {
+    if (factor == 1) return;
+    for (final stroke in strokes) {
+      stroke.scale(anchor, factor);
+    }
+    for (final image in images) {
+      image.dstRect = Rect.fromPoints(
+        anchor + (image.dstRect.topLeft - anchor) * factor,
+        anchor + (image.dstRect.bottomRight - anchor) * factor,
+      );
+    }
+    final matrix = Matrix4.identity()
+      ..translateByDouble(anchor.dx, anchor.dy, 0, 1)
+      ..scaleByDouble(factor, factor, 1, 1)
+      ..translateByDouble(-anchor.dx, -anchor.dy, 0, 1);
+    path = path.transform(matrix.storage);
+  }
+
   SelectResult copyWith({
     int? pageIndex,
     List<Stroke>? strokes,

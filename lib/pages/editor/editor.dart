@@ -627,6 +627,28 @@ class EditorState extends State<Editor> {
         case .backgroundPattern:
           coreInfo.backgroundPattern = item.backgroundPatternChange!.previous;
 
+        case .scale:
+          final anchor = item.scaleAnchor!, factor = 1 / item.scaleFactor!;
+          for (final stroke in item.strokes) {
+            stroke.scale(anchor, factor);
+          }
+          for (final image in item.images) {
+            image.dstRect = Rect.fromPoints(
+              anchor + (image.dstRect.topLeft - anchor) * factor,
+              anchor + (image.dstRect.bottomRight - anchor) * factor,
+            );
+          }
+          final select = Select.currentSelect;
+          if (select.doneSelecting) {
+            final matrix = Matrix4.identity()
+              ..translateByDouble(anchor.dx, anchor.dy, 0, 1)
+              ..scaleByDouble(factor, factor, 1, 1)
+              ..translateByDouble(-anchor.dx, -anchor.dy, 0, 1);
+            select.selectResult.path = select.selectResult.path.transform(
+              matrix.storage,
+            );
+          }
+
         case .split:
           for (final stroke in item.replacements) {
             for (final page in coreInfo.pages) {
@@ -640,7 +662,7 @@ class EditorState extends State<Editor> {
           removeExcessPages();
       }
 
-      if (item.type != .move) {
+      if (item.type != .move && item.type != .scale) {
         Select.currentSelect.unselect();
       }
     });
@@ -695,6 +717,8 @@ class EditorState extends State<Editor> {
         undo(
           item.copyWith(strokes: item.replacements, replacements: item.strokes),
         );
+      case .scale:
+        undo(item.copyWith(scaleFactor: 1 / item.scaleFactor!));
     }
   }
 
@@ -713,6 +737,11 @@ class EditorState extends State<Editor> {
   /// The position of the previous draw gesture event.
   /// Used to move a selection.
   Offset previousPosition = .zero;
+
+  /// While the selection is being resized: the corner that stays in place,
+  /// where the handle was grabbed, and how much bigger the selection is.
+  Offset? _resizeAnchor, _resizeStart;
+  var _resizeFactor = 1.0;
 
   /// The total offset of the current move gesture.
   /// Used to record a move in the history.
@@ -781,9 +810,19 @@ class EditorState extends State<Editor> {
       removeExcessPages();
     } else if (currentTool is Select) {
       final select = currentTool as Select;
+      final selection = select.selectResult;
       if (select.doneSelecting &&
-          select.selectResult.pageIndex == dragPageIndex! &&
-          select.selectResult.path.contains(position)) {
+          selection.pageIndex == dragPageIndex! &&
+          !selection.isEmpty &&
+          (position - selection.resizeHandle).distance <=
+              SelectResult.resizeHandleRadius) {
+        // resize from the handle, keeping the opposite corner in place
+        _resizeAnchor = selection.bounds.topLeft;
+        _resizeStart = selection.resizeHandle;
+        _resizeFactor = 1;
+      } else if (select.doneSelecting &&
+          selection.pageIndex == dragPageIndex! &&
+          selection.path.contains(position)) {
         // drag selection in onDrawUpdate
       } else {
         select.onDragStart(position, dragPageIndex!);
@@ -829,7 +868,17 @@ class EditorState extends State<Editor> {
       }
     } else if (currentTool is Select) {
       final select = currentTool as Select;
-      if (select.doneSelecting) {
+      if (_resizeAnchor case final anchor?) {
+        final start = _resizeStart! - anchor;
+        final current = position - anchor;
+        // how far along the diagonal the handle was dragged
+        final factor =
+            ((current.dx * start.dx + current.dy * start.dy) /
+                    start.distanceSquared)
+                .clamp(0.05, 20.0);
+        select.selectResult.scale(anchor, factor / _resizeFactor);
+        _resizeFactor = factor;
+      } else if (select.doneSelecting) {
         for (final stroke in select.selectResult.strokes) {
           stroke.shift(offset);
         }
@@ -889,6 +938,21 @@ class EditorState extends State<Editor> {
             strokes: erased,
             images: [],
             replacements: pieces,
+          ),
+        );
+      } else if (currentTool is Select && _resizeAnchor != null) {
+        final select = currentTool as Select;
+        final anchor = _resizeAnchor!, factor = _resizeFactor;
+        _resizeAnchor = _resizeStart = null;
+        if (factor == 1) return;
+        history.recordChange(
+          EditorHistoryItem(
+            type: .scale,
+            pageIndex: dragPageIndex!,
+            strokes: select.selectResult.strokes.toList(),
+            images: select.selectResult.images.toList(),
+            scaleAnchor: anchor,
+            scaleFactor: factor,
           ),
         );
       } else if (currentTool is Select) {
