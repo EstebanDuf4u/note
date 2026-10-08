@@ -34,13 +34,21 @@ Future<void> main(List<String> arguments) async {
     return;
   }
 
+  // the web editor is next to this script, in `server/web`
+  final webDirectory = Directory.fromUri(Platform.script.resolve('../web'));
   final server = RelayServer(
     dataDirectory: Directory(args.option('data')!),
     allowRegistration: args.flag('registration'),
+    webDirectory: webDirectory.existsSync() ? webDirectory : null,
   );
   await server.start(port: int.parse(args.option('port')!));
 
   stdout.writeln('Note+ realtime server listening on port ${server.port}');
+  if (server.webDirectory != null) {
+    stdout.writeln(
+      'The web editor is at http://<this machine>:${server.port}/',
+    );
+  }
   if (server.allowRegistration) {
     stdout.writeln(
       'Anyone who can reach this server can create an account. '

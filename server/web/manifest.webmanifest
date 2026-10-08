@@ -1,0 +1,17 @@
+{
+  "name": "Note+",
+  "short_name": "Note+",
+  "description": "Des notes manuscrites synchronisées en temps réel.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f5f8",
+  "theme_color": "#4f46e5",
+  "lang": "fr",
+  "icons": [
+    { "src": "/web/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/web/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/web/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

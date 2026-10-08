@@ -41,6 +41,7 @@ class RelayServer {
     this.allowRegistration = true,
     int passwordIterations = 100000,
     this.roomIdleTimeout = const Duration(minutes: 5),
+    this.webDirectory,
   }) : accounts = AccountStore(
          File('${dataDirectory.path}/accounts.json'),
          passwordIterations: passwordIterations,
@@ -60,6 +61,10 @@ class RelayServer {
 
   /// How long a note stays in memory after its last device has left.
   final Duration roomIdleTimeout;
+
+  /// The web editor, which is served to browsers so that notes can be
+  /// written in without installing the app, or null not to serve it.
+  final Directory? webDirectory;
 
   /// The notes of each user that has connected since the server started.
   final _notes = <String, Future<_UserNotes>>{};
@@ -101,6 +106,7 @@ class RelayServer {
     if (WebSocketTransformer.isUpgradeRequest(request)) {
       return _onWebSocket(request);
     }
+    if (await _serveWeb(request)) return;
 
     try {
       final response = await _onHttpRequest(request);
@@ -121,6 +127,68 @@ class RelayServer {
         ..write(jsonEncode({'error': 'server_error'}));
     }
     await request.response.close();
+  }
+
+  static const _contentTypes = {
+    'html': 'text/html; charset=utf-8',
+    'js': 'text/javascript; charset=utf-8',
+    'mjs': 'text/javascript; charset=utf-8',
+    'css': 'text/css; charset=utf-8',
+    'json': 'application/json',
+    'webmanifest': 'application/manifest+json',
+    'svg': 'image/svg+xml',
+    'png': 'image/png',
+    'ico': 'image/x-icon',
+    'woff2': 'font/woff2',
+    'ttf': 'font/ttf',
+    'txt': 'text/plain; charset=utf-8',
+  };
+
+  /// Serves the web editor to browsers, and returns whether [request] was
+  /// for it. The app's requests ask for json, so they go to the api.
+  Future<bool> _serveWeb(HttpRequest request) async {
+    final web = webDirectory;
+    if (web == null || request.method != 'GET') return false;
+    final path = request.uri.path;
+    final wantsPage =
+        request.headers.value(HttpHeaders.acceptHeader)?.contains('text/html') ??
+        false;
+
+    final String relative;
+    if (path.startsWith('/web/')) {
+      relative = path.substring('/web/'.length);
+    } else if (wantsPage &&
+        (path == '/' || path.startsWith('/s/') || path.startsWith('/n/'))) {
+      // the editor's own pages, e.g. a shared note's link
+      relative = 'index.html';
+    } else {
+      return false;
+    }
+
+    final segments = relative.split('/');
+    final file = File([web.path, ...segments].join('/'));
+    final isInside =
+        !segments.any((segment) => segment == '..' || segment.isEmpty) &&
+        file.existsSync();
+    final response = request.response;
+    if (!isInside) {
+      response.statusCode = HttpStatus.notFound;
+      await response.close();
+      return true;
+    }
+
+    final extension = relative.substring(relative.lastIndexOf('.') + 1);
+    response.headers
+      ..set(
+        HttpHeaders.contentTypeHeader,
+        _contentTypes[extension] ?? 'application/octet-stream',
+      )
+      // the editor is small and changes with the server, so it's always
+      // checked for changes rather than kept for a long time
+      ..set(HttpHeaders.cacheControlHeader, 'no-cache');
+    await response.addStream(file.openRead());
+    await response.close();
+    return true;
   }
 
   Future<Map<String, dynamic>> _onHttpRequest(HttpRequest request) async {
