@@ -240,6 +240,14 @@ class AccountStore {
     if (_sessions.remove(_hashToken(token)) != null) await _save();
   }
 
+  /// Returns the name of the user with id [userId], if there's one.
+  String? nameOf(String userId) {
+    for (final user in _users.values) {
+      if (user.id == userId) return user.name;
+    }
+    return null;
+  }
+
   /// Returns the id of the user that [token] was given to,
   /// or null if it isn't a session token.
   String? userIdFor(String? token) {

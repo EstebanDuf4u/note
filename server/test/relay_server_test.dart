@@ -33,15 +33,21 @@ class _TestClient {
   void send(Map<String, dynamic> message) =>
       socket.add(BsonCodec.serialize(message).byteList);
 
-  void join(String room, String client, {int since = 0, bool create = false}) =>
-      send({
-        'k': 'join',
-        'room': room,
-        'client': client,
-        'since': since,
-        'token': token,
-        'create': create,
-      });
+  void join(
+    String room,
+    String client, {
+    int since = 0,
+    bool create = false,
+    String? share,
+  }) => send({
+    'k': 'join',
+    'room': room,
+    'client': client,
+    'since': since,
+    'token': token,
+    'create': create,
+    'share': ?share,
+  });
 
   /// Waits until [count] messages of [kind] have been received.
   Future<List<Map<String, dynamic>>> waitFor(String kind, int count) async {
@@ -564,6 +570,7 @@ void main() {
           {'path': '/folder/note', 'head': 2},
         ],
         'deleted': <String>[],
+        'shared': <dynamic>[],
       });
 
       // also when the note hasn't been opened since the server started
@@ -572,6 +579,89 @@ void main() {
       expect((await list())['notes'], [
         {'path': '/folder/note', 'head': 2},
       ]);
+    });
+
+    test('a note is shared with another account through its link', () async {
+      final a = await _TestClient.connect(server, token)
+        ..join('/Maths', 'a');
+      await a.waitFor('synced', 1);
+      a.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {'n': 1},
+      });
+      await a.waitFor('ack', 1);
+
+      var (status, body) = await request(
+        'POST',
+        '/notes/share',
+        token: token,
+        body: {'path': '/Maths'},
+      );
+      expect(status, 200);
+      final link = body['token'] as String;
+      // sharing again gives the same link
+      (_, body) = await request(
+        'POST',
+        '/notes/share',
+        token: token,
+        body: {'path': '/Maths'},
+      );
+      expect(body['token'], link);
+
+      final bobToken = await register('bob');
+      (status, body) = await request(
+        'POST',
+        '/shares/accept',
+        token: bobToken,
+        body: {'token': link},
+      );
+      expect(body['owner'], 'alice');
+      expect(body['path'], '/Maths');
+
+      // bob sees alice's operations and his reach alice
+      final b = await _TestClient.connect(server, bobToken)
+        ..join('ignored', 'b', share: link);
+      final ops = await b.waitFor('op', 1);
+      expect((ops.single['d'] as Map)['n'], 1);
+      await b.waitFor('synced', 1);
+      b.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {'n': 2},
+      });
+      final aOps = await a.waitFor('op', 1);
+      expect((aOps.single['d'] as Map)['n'], 2);
+
+      // where each one is in the note, which isn't kept
+      b.send({
+        'k': 'presence',
+        'd': {'pg': 'p1', 'x': 10, 'y': 20},
+      });
+      final presence = await a.waitFor('presence', 1);
+      expect(presence.single['user'], 'bob');
+      expect((presence.single['d'] as Map)['x'], 10);
+
+      // it's listed among bob's notes, not as his own
+      (_, body) = await request('GET', '/notes', token: bobToken);
+      expect(body['notes'], isEmpty);
+      expect(body['shared'], [
+        {'token': link, 'path': '/Maths', 'owner': 'alice', 'head': 2},
+      ]);
+
+      // once alice stops sharing it, bob is disconnected and can't come back
+      await request(
+        'POST',
+        '/notes/unshare',
+        token: token,
+        body: {'path': '/Maths'},
+      );
+      await b.waitFor('deleted', 1);
+      (_, body) = await request('GET', '/notes', token: bobToken);
+      expect(body['shared'], isEmpty);
+      final b2 = await _TestClient.connect(server, bobToken)
+        ..join('ignored', 'b', share: link);
+      await b2.waitFor('deleted', 1);
     });
 
     test('keeps the latest favorite and cover of each note', () async {
@@ -641,6 +731,7 @@ void main() {
       expect(list, {
         'notes': <Object>[],
         'deleted': ['/note'],
+        'shared': <dynamic>[],
       });
 
       // a device that had the note is told that it was deleted
@@ -665,6 +756,7 @@ void main() {
           {'path': '/note', 'head': 1},
         ],
         'deleted': <String>[],
+        'shared': <dynamic>[],
       });
     });
   });
