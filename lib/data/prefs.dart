@@ -411,6 +411,17 @@ class Stows {
   /// to the index of the cover's color. See [NoteLibrary].
   final noteCovers = PlainStow('noteCovers', '{}', volatile: !_isOnMainIsolate);
 
+  /// Whether the eraser only erases what's under it,
+  /// rather than every stroke it touches.
+  final eraserPartial = PlainStow(
+    'eraserPartial',
+    true,
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// The radius of the eraser.
+  final eraserSize = PlainStow('eraserSize', 10.0, volatile: !_isOnMainIsolate);
+
   /// A json map from the path of each note whose favorite or cover changed
   /// to when it last changed, and what to, so that the account's devices
   /// keep the latest change. See [NoteLibrary].

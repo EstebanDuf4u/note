@@ -367,6 +367,15 @@ abstract final class NoteOps {
               stroke: inverse ? change.previous : change.current,
           }),
         ];
+      case .split:
+        final (removed, added) = inverse
+            ? (item.replacements, item.strokes)
+            : (item.strokes, item.replacements);
+        return [
+          if (removed.isNotEmpty) removeStrokes(removed),
+          for (final stroke in added)
+            addStroke(_pageOfStroke(stroke, coreInfo).id, stroke),
+        ];
       case .backgroundPattern:
         final change = item.backgroundPatternChange!;
         return [backgroundPattern(inverse ? change.previous : change.current)];

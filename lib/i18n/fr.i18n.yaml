@@ -355,6 +355,9 @@ editor:
     pencil: Crayon
     shapePen: Forme du stylo
     laserPointer: Pointeur laser
+  eraserOptions:
+    partial: Partielle
+    wholeStroke: Trait entier
   penOptions:
     size: Taille
   colors:

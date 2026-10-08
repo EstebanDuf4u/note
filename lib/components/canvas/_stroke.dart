@@ -118,7 +118,6 @@ class Stroke {
     required int pageIndex,
     required HasSize page,
   }) {
-
     final ToolId toolId = .parsePenType(json['ty'], fallback: .fountainPen);
 
     final options = StrokeOptions.fromJson(json);
@@ -420,6 +419,108 @@ class Stroke {
     } else {
       return (firstPoint, lastPoint);
     }
+  }
+
+  /// Returns what's left of this stroke after erasing the circle of [radius]
+  /// around [center]: the pieces on either side of the circle, which are new
+  /// strokes, or null if the circle doesn't touch this stroke.
+  ///
+  /// Shapes and dots are erased whole, so they return an empty list.
+  List<Stroke>? erasedAround(Offset center, double radius) {
+    final reach = radius + options.size / 2;
+    final sqrReach = reach * reach;
+    if (!lowQualityPath.getBounds().inflate(reach).contains(center)) {
+      return null;
+    }
+
+    bool isErased(Offset point) => (point - center).distanceSquared <= sqrReach;
+
+    // a dot, or a stroke too small to be cut
+    final isTiny =
+        points.length < 2 ||
+        _boundsOf(points).longestSide < options.size;
+    if (this is CircleStroke || this is RectangleStroke || isTiny) {
+      final touched =
+          lowQualityPath.contains(center) ||
+          lowQualityPolygon.any(isErased) ||
+          points.any(isErased);
+      return touched ? const [] : null;
+    }
+
+    // Points can be far apart where the pen moved fast, so the segments
+    // that pass close to the eraser get points in between.
+    final step = max(radius / 3, 0.5);
+    final dense = <PointVector>[points.first];
+    for (int i = 1; i < points.length; ++i) {
+      final a = points[i - 1], b = points[i];
+      final length = (b - a).distance;
+      if (length > step && _sqrDistanceToSegment(center, a, b) <= sqrReach) {
+        final count = (length / step).ceil();
+        for (int j = 1; j < count; ++j) {
+          final t = j / count;
+          dense.add(
+            PointVector(
+              a.x + (b.x - a.x) * t,
+              a.y + (b.y - a.y) * t,
+              a.pressure == null || b.pressure == null
+                  ? a.pressure ?? b.pressure
+                  : a.pressure! + (b.pressure! - a.pressure!) * t,
+            ),
+          );
+        }
+      }
+      dense.add(b);
+    }
+
+    final pieces = <List<PointVector>>[[]];
+    var touched = false;
+    for (final point in dense) {
+      if (isErased(point)) {
+        touched = true;
+        if (pieces.last.isNotEmpty) pieces.add([]);
+      } else {
+        pieces.last.add(point);
+      }
+    }
+    if (!touched) return null;
+
+    return [
+      for (final piece in pieces)
+        if (piece.length >= 2)
+          Stroke(
+              color: color,
+              pressureEnabled: pressureEnabled,
+              options: options.copyWith(),
+              pageIndex: pageIndex,
+              page: page,
+              toolId: toolId,
+            )
+            ..points.addAll(piece)
+            ..options.isComplete = true,
+    ];
+  }
+
+  static Rect _boundsOf(List<Offset> points) {
+    var (left, top) = (points.first.dx, points.first.dy);
+    var (right, bottom) = (left, top);
+    for (final point in points) {
+      left = min(left, point.dx);
+      right = max(right, point.dx);
+      top = min(top, point.dy);
+      bottom = max(bottom, point.dy);
+    }
+    return .fromLTRB(left, top, right, bottom);
+  }
+
+  static double _sqrDistanceToSegment(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final lengthSquared = ab.distanceSquared;
+    if (lengthSquared == 0) return (p - a).distanceSquared;
+    final t = (((p - a).dx * ab.dx + (p - a).dy * ab.dy) / lengthSquared).clamp(
+      0.0,
+      1.0,
+    );
+    return (p - (a + ab * t)).distanceSquared;
   }
 
   Stroke copy() => Stroke(
