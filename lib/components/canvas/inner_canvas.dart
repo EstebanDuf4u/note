@@ -157,6 +157,21 @@ class _InnerCanvasState extends State<InnerCanvas> {
                     isBackground: true,
                     readOnly: true,
                   ),
+                if (widget.coreInfo.flashcards)
+                  // between the question and the answer
+                  Positioned(
+                    top: page.size.height / 2 - 1,
+                    left: 0,
+                    width: widget.width,
+                    height: 2,
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: _DashedLinePainter(
+                          colorScheme.primary.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   top: 0,
                   left: 0,
@@ -188,4 +203,29 @@ class _InnerCanvasState extends State<InnerCanvas> {
       ),
     );
   }
+}
+
+class _DashedLinePainter extends CustomPainter {
+  const new(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = size.height;
+    const dash = 14.0, gap = 10.0;
+    for (double x = 0; x < size.width; x += dash + gap) {
+      canvas.drawLine(
+        Offset(x, size.height / 2),
+        Offset(x + dash, size.height / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
 }

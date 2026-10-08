@@ -70,6 +70,7 @@ class _HomeLayoutDialogOption extends StatelessWidget {
       },
       leading: homeLayout.icon,
       title: Text(switch (homeLayout) {
+        .notebooks => t.home.layout.notebooks,
         .masonryGrid => t.home.layout.masonryGrid,
         .simpleGrid => t.home.layout.simpleGrid,
       }),
@@ -85,11 +86,15 @@ enum HomeLayout({
   required final bool fillVertical,
 }) {
   masonryGrid(fillVertical: false),
-  simpleGrid(fillVertical: true);
+  simpleGrid(fillVertical: true),
+
+  /// Each note looks like a notebook on a shelf, with its name underneath.
+  notebooks(fillVertical: true);
 
   static const codec = EnumCodec(values);
 
   Widget get icon => switch (this) {
+    .notebooks => const Icon(Icons.auto_stories),
     .masonryGrid => const Icon(Symbols.browse),
     .simpleGrid => const Icon(Icons.grid_view),
   };

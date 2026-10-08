@@ -1,4 +1,4 @@
-package com.adilhanney.saber
+package fr.noryx.noteplus
 
 import android.os.Bundle
 import androidx.core.view.ViewCompat

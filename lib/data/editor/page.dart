@@ -5,12 +5,14 @@ import 'dart:ui' show FragmentShader;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/quill_delta.dart';
 import 'package:saber/components/canvas/_asset_cache.dart';
 import 'package:saber/components/canvas/_stroke.dart';
 import 'package:saber/components/canvas/image/editor_image.dart';
 import 'package:saber/components/canvas/inner_canvas.dart';
 import 'package:saber/components/canvas/pencil_shader.dart';
 import 'package:saber/data/editor/editor_exporter.dart';
+import 'package:saber/data/flashcards/study_state.dart';
 import 'package:saber/data/tools/laser_pointer.dart';
 import 'package:sbn/has_size.dart';
 
@@ -53,6 +55,14 @@ class EditorPage extends ChangeNotifier implements HasSize {
   final List<LaserStroke> laserStrokes;
   final List<EditorImage> images;
   final QuillStruct quill;
+
+  /// The text of this page when its changes were last turned into realtime
+  /// operations, so that the next changes can be told apart from it.
+  late Delta syncedText;
+
+  /// How well the user knows this page as a flashcard,
+  /// or null if it has never been studied.
+  StudyState? study;
 
   EditorImage? backgroundImage;
 
@@ -114,6 +124,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     QuillStruct? quill,
     this.backgroundImage,
     this.id = '',
+    this.study,
   }) : assert(
          (size == null) || (width == null && height == null),
          "size and width/height shouldn't both be specified",
@@ -127,7 +138,9 @@ class EditorPage extends ChangeNotifier implements HasSize {
            QuillStruct(
              controller: QuillController.basic(),
              focusNode: FocusNode(debugLabel: 'Quill Focus Node'),
-           );
+           ) {
+    syncedText = this.quill.controller.document.toDelta();
+  }
 
   factory fromJson(
     Map<String, dynamic> json, {
@@ -140,6 +153,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     final size = Size(json['w'] ?? defaultWidth, json['h'] ?? defaultHeight);
     return EditorPage(
       id: json['id'] as String? ?? '',
+      study: json['fc'] != null ? StudyState.fromJson(json['fc'] as Map) : null,
       size: size,
       strokes: parseStrokesJson(
         json['s'] as List?,
@@ -187,6 +201,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     if (!quill.controller.document.isEmpty())
       'q': quill.controller.document.toDelta().toJson(),
     if (backgroundImage != null) 'b': backgroundImage?.toJson(assets),
+    if (study != null) 'fc': study!.toJson(),
   };
 
   /// Inserts a stroke, while keeping the strokes sorted by

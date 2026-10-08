@@ -16,6 +16,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 import 'package:saber/components/canvas/pencil_shader.dart';
 import 'package:saber/components/theming/dynamic_material_app.dart';
+import 'package:saber/data/app_id_migration.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/flavor_config.dart';
 import 'package:saber/data/nextcloud/nc_http_overrides.dart';
@@ -43,6 +44,9 @@ Future<void> main(List<String> args) async {
   ///   --dart-define=APP_STORE="Google Play" \
   ///   --dart-define=UPDATE_CHECK="false"
   FlavorConfig.setupFromEnvironment();
+
+  // before anything reads the settings
+  AppIdMigration.run();
 
   await initSentry(() => appRunner(args));
 }

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:bson/bson.dart';
 import 'package:crypto/crypto.dart';
+import 'package:dart_quill_delta/dart_quill_delta.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:noteplus_server/accounts.dart';
 
@@ -31,7 +32,8 @@ class _Refusal implements Exception {
 /// disk, and forwards it to the account's other devices that have the note
 /// open. A device that joins a room is first sent the operations it missed.
 ///
-/// The server never looks inside an operation.
+/// The server doesn't look inside an operation, except those that change
+/// the text of a page: see [_Room._mergeText].
 class RelayServer {
   new({
     required this.dataDirectory,
@@ -479,6 +481,11 @@ class _Room {
       );
       room._frames.add(frame);
       room._lastOpIds[message['from'] as String] = _int(message['cid']);
+      room._recordText(
+        message['d'],
+        seq: room._frames.length,
+        from: message['from'] as String,
+      );
       offset += 4 + length;
     }
     if (offset != bytes.length) await room._log.truncate(offset);
@@ -513,6 +520,7 @@ class _Room {
     }
 
     final seq = head + 1;
+    op = _mergeText(op, seq: seq, from: sender.id);
     final frame = BsonCodec.serialize({
       'k': 'op',
       'seq': seq,
@@ -538,6 +546,71 @@ class _Room {
     }
   }
 
+  /// The text of each page that has some, by the page's id.
+  final _texts = <String, _PageText>{};
+
+  static const _textDeltaType = 'qd', _textType = 'qt';
+
+  /// Rewrites an operation that changes the text of a page so that it applies
+  /// to the text as it is now, and returns it. Other operations are returned
+  /// as they are.
+  ///
+  /// A device describes its change (`qd`) relative to the text it had, which
+  /// was up to date with the operation numbered `b`. If other devices changed
+  /// the same text since then, the change is transformed so that both changes
+  /// are kept, e.g. two people typing in different places of a paragraph.
+  ///
+  /// A device can also send a whole text (`qt`), when it shares a note for
+  /// the first time. It's rewritten as the change that leads to that text.
+  Map<dynamic, dynamic> _mergeText(
+    Map<dynamic, dynamic> op, {
+    required int seq,
+    required String from,
+  }) {
+    final type = op['t'], pageId = op['pg'];
+    if ((type != _textDeltaType && type != _textType) || pageId is! String) {
+      return op;
+    }
+
+    final text = _texts.putIfAbsent(pageId, _PageText.new);
+    try {
+      Delta change;
+      if (type == _textType) {
+        change = text.document.diff(Delta.fromJson(op['q'] as List));
+      } else {
+        change = Delta.fromJson(op['d'] as List);
+        final base = _int(op['b'] ?? seq - 1);
+        for (final other in text.changes) {
+          // a device sends its changes to a text one at a time, so its
+          // own earlier changes are already part of what it describes
+          if (other.seq <= base || other.from == from) continue;
+          change = other.delta.transform(change, true);
+        }
+      }
+      text.document = text.document.compose(change);
+      text.changes.add((seq: seq, from: from, delta: change));
+      return {'t': _textDeltaType, 'pg': pageId, 'd': change.toJson()};
+    } catch (e) {
+      stderr.writeln('Dropped a change to the text of page $pageId: $e');
+      return {'t': _textDeltaType, 'pg': pageId, 'd': const <dynamic>[]};
+    }
+  }
+
+  /// Takes note of a text change that is already in the log.
+  void _recordText(dynamic op, {required int seq, required String from}) {
+    if (op is! Map || op['t'] != _textDeltaType) return;
+    final pageId = op['pg'];
+    if (pageId is! String) return;
+    try {
+      final change = Delta.fromJson(op['d'] as List);
+      final text = _texts.putIfAbsent(pageId, _PageText.new);
+      text.document = text.document.compose(change);
+      text.changes.add((seq: seq, from: from, delta: change));
+    } catch (e) {
+      stderr.writeln('Invalid text change in the log of $path: $e');
+    }
+  }
+
   Future<void> close() async {
     // Don't wait for the devices to confirm, since one that has
     // stopped responding would keep the server from stopping.
@@ -548,4 +621,12 @@ class _Room {
     await _lastAppend;
     await _log.close();
   }
+}
+
+/// The text of a page, and the changes that led to it.
+class _PageText {
+  /// A page's text is a paragraph break until something is typed.
+  var document = Delta()..insert('\n');
+
+  final changes = <({int seq, String from, Delta delta})>[];
 }

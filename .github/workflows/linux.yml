@@ -85,9 +85,9 @@ jobs:
           mv ${{ matrix.arch.flutter-output-folder }}/* AppDir
           chmod +x AppDir/saber
 
-          install -Dm644 flatpak/com.adilhanney.saber.metainfo.xml -t AppDir/share/metainfo/
-          install -Dm644 assets/icon/icon_linux.svg AppDir/share/icons/hicolor/scalable/apps/com.adilhanney.saber.svg
-          install -Dm644 flatpak/com.adilhanney.saber.desktop -t AppDir/share/applications/
+          install -Dm644 flatpak/fr.noryx.noteplus.metainfo.xml -t AppDir/share/metainfo/
+          install -Dm644 assets/icon/icon_linux.svg AppDir/share/icons/hicolor/scalable/apps/fr.noryx.noteplus.svg
+          install -Dm644 flatpak/fr.noryx.noteplus.desktop -t AppDir/share/applications/
 
           tar -C AppDir -czvf $archiveName .
 

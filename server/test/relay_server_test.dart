@@ -262,6 +262,112 @@ void main() {
       expect(other.messages.where((message) => message['k'] == 'op'), isEmpty);
     });
 
+    test('merges changes made to the same text at the same time', () async {
+      final a = await _TestClient.connect(server, token)
+        ..join('/note', 'a');
+      final b = await _TestClient.connect(server, token)
+        ..join('/note', 'b');
+      await Future.wait([a.waitFor('synced', 1), b.waitFor('synced', 1)]);
+
+      // a shares the whole text, which becomes a change to an empty text
+      a.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {
+          't': 'qt',
+          'pg': 'p0',
+          'q': [
+            {'insert': 'Hello world\n'},
+          ],
+        },
+      });
+      final first = (await b.waitFor('op', 1)).single;
+      expect(first['d'], {
+        't': 'qd',
+        'pg': 'p0',
+        'd': [
+          {'insert': 'Hello world'},
+        ],
+      });
+
+      // both devices change the text that they've seen up to operation 1
+      a.send({
+        'k': 'op',
+        'cid': 2,
+        'd': {
+          't': 'qd',
+          'pg': 'p0',
+          'b': 1,
+          'd': [
+            {'insert': 'Oh, '},
+          ],
+        },
+      });
+      // b's change is sent before it has seen a's, but arrives after it
+      await a.waitFor('ack', 2);
+      b.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {
+          't': 'qd',
+          'pg': 'p0',
+          'b': 1,
+          'd': [
+            {'retain': 5},
+            {'insert': ' there'},
+          ],
+        },
+      });
+
+      // b's change is moved to where "Hello" ends now
+      final toA = (await a.waitFor('op', 1)).single;
+      expect(_int(toA['seq']), 3);
+      expect((toA['d'] as Map)['d'], [
+        {'retain': 9},
+        {'insert': ' there'},
+      ]);
+
+      // a device that joins later gets the merged changes
+      await server.stop();
+      await startServer();
+      final c = await _TestClient.connect(server, token)
+        ..join('/note', 'c');
+      final ops = await c.waitFor('op', 3);
+      expect(ops.map((op) => (op['d'] as Map)['d']), [
+        [
+          {'insert': 'Hello world'},
+        ],
+        [
+          {'insert': 'Oh, '},
+        ],
+        [
+          {'retain': 9},
+          {'insert': ' there'},
+        ],
+      ]);
+
+      // and a change based on everything isn't transformed
+      c.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {
+          't': 'qd',
+          'pg': 'p0',
+          'b': 3,
+          'd': [
+            {'delete': 4},
+          ],
+        },
+      });
+      await c.waitFor('ack', 1);
+      final d = await _TestClient.connect(server, token)
+        ..join('/note', 'd');
+      final last = (await d.waitFor('op', 4)).last;
+      expect((last['d'] as Map)['d'], [
+        {'delete': 4},
+      ]);
+    });
+
     test('sends the missed operations when joining', () async {
       final a = await _TestClient.connect(server, token)
         ..join('/note', 'a');

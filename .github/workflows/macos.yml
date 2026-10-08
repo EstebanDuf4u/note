@@ -61,7 +61,7 @@ jobs:
           rm -rf submodules/flutter/packages/flutter_tools/templates/app/ios.tmpl/Runner.xcodeproj
           rm -rf submodules/flutter/packages/flutter_tools/templates/app/macos.tmpl/Runner.xcodeproj
 
-          app-store-connect fetch-signing-files com.adilhanney.saber \
+          app-store-connect fetch-signing-files fr.noryx.noteplus \
             --platform MAC_OS \
             --type MAC_APP_STORE \
             --certificate-key=@env:APP_STORE_CERTIFICATE_KEY \

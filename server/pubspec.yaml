@@ -10,6 +10,7 @@ dependencies:
   args: ^2.5.0
   bson: ^5.0.0
   crypto: ^3.0.2
+  dart_quill_delta: ^10.8.3
   fixnum: ^1.1.0
 
 dev_dependencies:

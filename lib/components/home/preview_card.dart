@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:saber/components/canvas/_stroke.dart';
 import 'package:saber/components/canvas/inner_canvas.dart';
 import 'package:saber/components/canvas/invert_widget.dart';
+import 'package:saber/components/home/notebook_cover.dart';
 import 'package:saber/components/home/sync_indicator.dart';
 import 'package:saber/data/extensions/color_extensions.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/is_this_a_test.dart';
+import 'package:saber/data/note_library.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/data/routes.dart';
 import 'package:saber/i18n/strings.g.dart';
@@ -77,7 +79,8 @@ class _PreviewCardState extends State<PreviewCard> {
   }
 
   void _toggleCardSelection() {
-    expanded.value = !expanded.value;
+    // the note may have been (un)selected through another card of it
+    expanded.value = !widget.selected;
     widget.toggleSelection(widget.filePath, expanded.value);
   }
 
@@ -99,6 +102,14 @@ class _PreviewCardState extends State<PreviewCard> {
       milliseconds: disableAnimations ? 0 : 300,
     );
     final invert = theme.brightness == .dark && stows.editorAutoInvert.value;
+
+    if (stows.homeLayout.value == .notebooks) {
+      return _buildNotebook(
+        context,
+        invert: invert,
+        transitionDuration: transitionDuration,
+      );
+    }
 
     final Widget card = MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -242,6 +253,115 @@ class _PreviewCardState extends State<PreviewCard> {
           onClosed: (_) => _refreshThumbnailAfterDelay(),
         );
       },
+    );
+  }
+
+  /// Builds the card for [HomeLayout.notebooks].
+  Widget _buildNotebook(
+    BuildContext context, {
+    required bool invert,
+    required Duration transitionDuration,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final name = widget.filePath.substring(
+      widget.filePath.lastIndexOf('/') + 1,
+    );
+    final lastModified = FileManager.lastModified(
+      widget.filePath + Editor.extension,
+    );
+
+    final Widget card = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: .opaque,
+        onTap: widget.isAnythingSelected ? _toggleCardSelection : null,
+        onSecondaryTap: _toggleCardSelection,
+        onLongPress: _toggleCardSelection,
+        child: Column(
+          children: [
+            Expanded(
+              child: Align(
+                alignment: .bottomCenter,
+                child: Stack(
+                  children: [
+                    ListenableBuilder(
+                      listenable: Listenable.merge([
+                        thumbnail,
+                        stows.favoriteNotes,
+                        stows.noteCovers,
+                      ]),
+                      builder: (context, _) => NotebookCover(
+                        title: name,
+                        color: NoteLibrary.coverOf(widget.filePath),
+                        selected: widget.selected,
+                        favorite: NoteLibrary.isFavorite(widget.filePath),
+                        preview: ColoredBox(
+                          color: InnerCanvas.defaultBackgroundColor
+                              .withInversion(invert),
+                          child: InvertWidget(
+                            invert: invert,
+                            child: thumbnail.doesImageExist
+                                ? Image(
+                                    image: thumbnail.image!,
+                                    alignment: .topCenter,
+                                    fit: .cover,
+                                  )
+                                : const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SyncIndicator(filePath: widget.filePath),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // always two lines tall, so that the covers of a row line up
+            SizedBox(
+              height: 36,
+              child: Align(
+                alignment: .topCenter,
+                child: Text(
+                  name,
+                  maxLines: 2,
+                  overflow: .ellipsis,
+                  textAlign: .center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: .w500,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ),
+            Text(
+              MaterialLocalizations.of(context).formatShortDate(lastModified),
+              maxLines: 1,
+              overflow: .ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return OpenContainer(
+      // the cover's shadow extends beyond the card
+      clipBehavior: Clip.none,
+      closedColor: Colors.transparent,
+      closedShape: const RoundedRectangleBorder(),
+      closedElevation: 0,
+      closedBuilder: (context, action) => card,
+      openColor: colorScheme.surface,
+      openBuilder: (context, action) => Editor(path: widget.filePath),
+      transitionDuration: transitionDuration,
+      routeSettings: RouteSettings(
+        name: RoutePaths.editFilePath(widget.filePath),
+      ),
+      onClosed: (_) => _refreshThumbnailAfterDelay(),
     );
   }
 

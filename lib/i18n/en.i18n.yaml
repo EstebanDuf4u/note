@@ -79,6 +79,17 @@ home:
     layout: Layout
     masonryGrid: Masonry grid
     simpleGrid: Simple grid
+    notebooks: Notebooks
+  favorites: Favorites
+  recent: Recent
+  search: Search your notes
+  noSearchResults: No notes match your search
+  addToFavorites: Add to favorites
+  removeFromFavorites: Remove from favorites
+  cover:
+    change: Change cover
+    title: Cover
+    firstPage: First page
 sentry:
   consent:
     title: Help improve Saber?
@@ -233,7 +244,7 @@ account:
   tapToSignIn: Sign in to sync your notes between your devices
   signedInAs: Signed in as $u
   intro: Sign in on each of your devices, and your notes will be kept in sync between them as you write.
-  limitations: Handwriting, pages, images and text are synced. If the text of a page is changed on two devices at the same time, the last change is kept.
+  limitations: Handwriting, pages, images and text are synced.
   signInRequired: Sign in to open your notes.
   server: Server address
   serverHint: For example 192.168.1.10:8787
@@ -300,6 +311,27 @@ update:
   update: Update
   downloadNotAvailableYet: The download isn't available yet for your platform. Please check back shortly.
 editor:
+  flashcards:
+    mode: Flashcards
+    modeDescription: "Each page is a card: the question in the top half, the answer in the bottom half."
+    study: Study
+    showAnswer: Show the answer
+    again: Again
+    hard: Hard
+    good: Good
+    easy: Easy
+    nothingDue: Nothing to study right now
+    studyAll: Study every card
+    done: Done!
+    doneDescription: "Cards studied: $n"
+    noCards: "This note has no cards yet. Write a question in the top half of a page and its answer in the bottom half."
+    close: Close
+    progress: $done / $total
+    minutes: $n min
+    days: $n d
+    months: $n mo
+    years: $n y
+  pagePanel: Page thumbnails
   realtime:
     offline: Realtime sync is offline. Your changes will be sent when it reconnects.
     catchingUp: Catching up with your other devices…

@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
+import 'package:saber/components/home/cover_note_button.dart';
 import 'package:saber/components/home/delete_note_button.dart';
 import 'package:saber/components/home/export_note_button.dart';
+import 'package:saber/components/home/favorite_note_button.dart';
 import 'package:saber/components/home/grid_folders.dart';
 import 'package:saber/components/home/home_layout_button.dart';
 import 'package:saber/components/home/masonry_files.dart';
@@ -42,6 +44,45 @@ class _BrowsePageState extends State<BrowsePage> {
 
   final ValueNotifier<List<String>> selectedFiles = ValueNotifier([]);
 
+  /// Whether the search field is shown.
+  var searching = false;
+
+  /// What the user typed in the search field.
+  var query = '';
+
+  /// Every note in the library, loaded when the user starts searching.
+  List<String>? allFiles;
+
+  /// The notes whose name contains [query], wherever they are in the library.
+  List<String> get searchResults {
+    final words = query.toLowerCase().split(' ').where((w) => w.isNotEmpty);
+    return [
+      for (final filePath in allFiles ?? const <String>[])
+        if (words.every(p.basename(filePath).toLowerCase().contains)) filePath,
+    ];
+  }
+
+  Future<void> _loadAllFiles() async {
+    final files = BrowsePage.overrideChildren != null
+        ? [for (final file in BrowsePage.overrideChildren!.files) '/$file']
+        : await FileManager.getAllFiles();
+    files.sort(
+      (a, b) =>
+          p.basename(a).toLowerCase().compareTo(p.basename(b).toLowerCase()),
+    );
+    allFiles = files;
+    if (mounted) setState(() {});
+  }
+
+  void _setSearching(bool searching) {
+    selectedFiles.value = [];
+    setState(() {
+      this.searching = searching;
+      query = '';
+    });
+    if (searching) unawaited(_loadAllFiles());
+  }
+
   @override
   void initState() {
     path = widget.initialPath;
@@ -64,6 +105,7 @@ class _BrowsePageState extends State<BrowsePage> {
 
   StreamSubscription? fileWriteSubscription;
   void fileWriteListener(FileOperation event) {
+    if (searching) unawaited(_loadAllFiles());
     if (!event.filePath.startsWith(path ?? '/')) return;
     findChildrenOfPath(fromFileListener: true);
   }
@@ -144,67 +186,116 @@ class _BrowsePageState extends State<BrowsePage> {
                 bottom: 8, // less than other pages for path components
               ),
             ),
-            actions: const [
-              BrowseSortButton(),
-              HomeLayoutButton(),
-              SyncingButton(),
-            ],
-          ),
-          SliverToBoxAdapter(
-            child: PathComponents(path, onPathComponentTap: onPathComponentTap),
-          ),
-          const SliverPadding(padding: .only(bottom: 16)),
-          GridFolders(
-            isAtRoot: path?.isEmpty ?? true,
-            crossAxisCount: crossAxisCount,
-            onTap: onDirectoryTap,
-            createFolder: createFolder,
-            doesFolderExist: (String folderName) {
-              return children?.directories.contains(folderName) ?? false;
-            },
-            renameFolder: (String oldName, String newName) async {
-              final oldPath = '${path ?? ''}/$oldName';
-              await FileManager.renameDirectory(oldPath, newName);
-              findChildrenOfPath();
-            },
-            isFolderEmpty: (String folderName) async {
-              final folderPath = '${path ?? ''}/$folderName';
-              final children = await FileManager.getChildrenOfDirectory(
-                folderPath,
-              );
-              return children?.isEmpty ?? true;
-            },
-            deleteFolder: (String folderName) async {
-              final folderPath = '${path ?? ''}/$folderName';
-              await FileManager.deleteDirectory(folderPath);
-              findChildrenOfPath();
-            },
-            folders: [
-              for (final directoryPath in children?.directories ?? const [])
-                directoryPath,
-            ],
-          ),
-          if (children == null) ...[
-            // loading
-          ] else if (children!.isEmpty) ...[
-            const SliverSafeArea(sliver: SliverToBoxAdapter(child: NoFiles())),
-          ] else ...[
-            SliverSafeArea(
-              top: false,
-              minimum: const .only(
-                top: 8,
-                // Allow space for the FloatingActionButton
-                bottom: 70,
+            actions: [
+              IconButton(
+                tooltip: t.home.search,
+                onPressed: () => _setSearching(!searching),
+                icon: Icon(searching ? Icons.search_off : Icons.search),
               ),
-              sliver: MasonryFiles(
-                crossAxisCount: crossAxisCount,
-                files: [
-                  for (final filePath in children?.files ?? const [])
-                    "${path ?? ""}/$filePath",
-                ],
-                selectedFiles: selectedFiles,
+              const BrowseSortButton(),
+              const HomeLayoutButton(),
+              const SyncingButton(),
+            ],
+          ),
+          if (searching) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const .fromLTRB(16, 8, 16, 8),
+                child: TextField(
+                  autofocus: true,
+                  onChanged: (value) => setState(() => query = value),
+                  decoration: InputDecoration(
+                    hintText: t.home.search,
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
               ),
             ),
+            if (allFiles != null && searchResults.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const .all(32),
+                  child: Text(
+                    t.home.noSearchResults,
+                    textAlign: .center,
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              )
+            else
+              SliverSafeArea(
+                top: false,
+                minimum: const .only(top: 8, bottom: 70),
+                sliver: MasonryFiles(
+                  crossAxisCount: crossAxisCount,
+                  files: searchResults,
+                  selectedFiles: selectedFiles,
+                ),
+              ),
+          ] else ...[
+            SliverToBoxAdapter(
+              child: PathComponents(
+                path,
+                onPathComponentTap: onPathComponentTap,
+              ),
+            ),
+            const SliverPadding(padding: .only(bottom: 16)),
+            GridFolders(
+              isAtRoot: path?.isEmpty ?? true,
+              crossAxisCount: crossAxisCount,
+              onTap: onDirectoryTap,
+              createFolder: createFolder,
+              doesFolderExist: (String folderName) {
+                return children?.directories.contains(folderName) ?? false;
+              },
+              renameFolder: (String oldName, String newName) async {
+                final oldPath = '${path ?? ''}/$oldName';
+                await FileManager.renameDirectory(oldPath, newName);
+                findChildrenOfPath();
+              },
+              isFolderEmpty: (String folderName) async {
+                final folderPath = '${path ?? ''}/$folderName';
+                final children = await FileManager.getChildrenOfDirectory(
+                  folderPath,
+                );
+                return children?.isEmpty ?? true;
+              },
+              deleteFolder: (String folderName) async {
+                final folderPath = '${path ?? ''}/$folderName';
+                await FileManager.deleteDirectory(folderPath);
+                findChildrenOfPath();
+              },
+              folders: [
+                for (final directoryPath in children?.directories ?? const [])
+                  directoryPath,
+              ],
+            ),
+            if (children == null) ...[
+              // loading
+            ] else if (children!.isEmpty) ...[
+              const SliverSafeArea(
+                sliver: SliverToBoxAdapter(child: NoFiles()),
+              ),
+            ] else ...[
+              SliverSafeArea(
+                top: false,
+                minimum: const .only(
+                  top: 8,
+                  // Allow space for the FloatingActionButton
+                  bottom: 70,
+                ),
+                sliver: MasonryFiles(
+                  crossAxisCount: crossAxisCount,
+                  files: [
+                    for (final filePath in children?.files ?? const [])
+                      "${path ?? ""}/$filePath",
+                  ],
+                  selectedFiles: selectedFiles,
+                ),
+              ),
+            ],
           ],
         ],
       ),
@@ -225,6 +316,8 @@ class _BrowsePageState extends State<BrowsePage> {
                   unselectNotes: () => selectedFiles.value = [],
                 ),
               ),
+              FavoriteNoteButton(selectedFiles: selectedFiles.value),
+              CoverNoteButton(selectedFiles: selectedFiles.value),
               MoveNoteButton(
                 filesToMove: selectedFiles.value,
                 unselectNotes: () => selectedFiles.value = [],

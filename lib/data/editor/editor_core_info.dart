@@ -80,6 +80,10 @@ class EditorCoreInfo {
   /// or null if this note has never been synced in realtime.
   int? realtimeSeq;
 
+  /// Whether this note is a deck of flashcards: each page is a card, with
+  /// the question in its top half and the answer in its bottom half.
+  var flashcards = false;
+
   /// Local operations that the realtime server hasn't acknowledged yet.
   /// They're saved with the note so that offline edits are sent later.
   List<Map<String, dynamic>> pendingOps = [];
@@ -129,6 +133,7 @@ class EditorCoreInfo {
     required AssetCache? assetCache,
     this.realtimeSeq,
     List<Map<String, dynamic>>? pendingOps,
+    this.flashcards = false,
   }) : assetCache = assetCache ?? AssetCache(),
        pendingOps = pendingOps ?? [] {
     _handleEmptyImageIds();
@@ -206,6 +211,7 @@ class EditorCoreInfo {
         initialPageIndex: json['c'] as int?,
         assetCache: assetCache,
         realtimeSeq: (json['rs'] as num?)?.toInt(),
+        flashcards: json['fl'] == true,
         pendingOps: (json['rq'] as List?)
             ?.map((op) => Map<String, dynamic>.from(op as Map))
             .toList(),
@@ -515,6 +521,7 @@ class EditorCoreInfo {
       'lt': lineThickness,
       'z': pages.map((EditorPage page) => page.toJson(assets)).toList(),
       'c': initialPageIndex,
+      if (flashcards) 'fl': true,
       if (realtimeSeq != null) 'rs': realtimeSeq,
       if (pendingOps.isNotEmpty) 'rq': pendingOps,
     };
@@ -592,6 +599,7 @@ class EditorCoreInfo {
       assetCache: assetCache,
       realtimeSeq: realtimeSeq,
       pendingOps: pendingOps,
+      flashcards: flashcards,
     );
   }
 }

@@ -33,10 +33,10 @@ parts:
       ./patches/pre/remove_proprietary_dependencies.sh
       craftctl default
       mkdir -p $CRAFT_PART_INSTALL/meta/gui
-      mv $CRAFT_PART_SRC/flatpak/com.adilhanney.saber.desktop $CRAFT_PART_INSTALL/meta/gui/saber.desktop
+      mv $CRAFT_PART_SRC/flatpak/fr.noryx.noteplus.desktop $CRAFT_PART_INSTALL/meta/gui/saber.desktop
       mkdir $CRAFT_PART_INSTALL/metainfo
-      mv $CRAFT_PART_SRC/flatpak/com.adilhanney.saber.metainfo.xml $CRAFT_PART_INSTALL/metainfo/
-    parse-info: [metainfo/com.adilhanney.saber.metainfo.xml]
+      mv $CRAFT_PART_SRC/flatpak/fr.noryx.noteplus.metainfo.xml $CRAFT_PART_INSTALL/metainfo/
+    parse-info: [metainfo/fr.noryx.noteplus.metainfo.xml]
 
   cleanup:
     after: [saber]
@@ -56,7 +56,7 @@ apps:
     command: saber
     desktop: meta/gui/saber.desktop
     extensions: [gnome]
-    common-id: com.adilhanney.saber
+    common-id: fr.noryx.noteplus
     plugs:
       - home
       - network

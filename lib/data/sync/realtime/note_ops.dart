@@ -18,6 +18,7 @@ import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/editor_history.dart';
 import 'package:saber/data/editor/ids.dart';
 import 'package:saber/data/editor/page.dart';
+import 'package:saber/data/flashcards/study_state.dart';
 import 'package:sbn/canvas_background_pattern.dart';
 
 /// A change to a note, in a form that can be sent to other devices.
@@ -100,6 +101,9 @@ abstract final class NoteOps {
   static const removeImagesType = 'ri';
   static const updateImageType = 'ui';
   static const textType = 'qt';
+  static const textDeltaType = 'qd';
+  static const flashcardsType = 'fl';
+  static const studyType = 'fc';
 
   static NoteOp addStroke(String pageId, Stroke stroke) => {
     't': addStrokeType,
@@ -229,14 +233,41 @@ abstract final class NoteOps {
     'f': image.backgroundFit.index,
   };
 
-  /// Describes the whole text of [page].
+  /// Describes the whole text of [page], for when a note or a page is shared
+  /// for the first time. Later changes are sent with [textChange].
   ///
-  /// Text is synced a page at a time: if two devices change the text of the
-  /// same page at once, the change that reaches the server last is kept.
-  static NoteOp text(EditorPage page) => {
-    't': textType,
+  /// The server turns this into the change that leads to this text.
+  static NoteOp text(EditorPage page) {
+    final text = page.quill.controller.document.toDelta();
+    page.syncedText = text;
+    return {'t': textType, 'pg': page.id, 'q': text.toJson()};
+  }
+
+  /// Returns the operation that describes how the text of [page] has changed
+  /// since its last operation, or null if it hasn't.
+  ///
+  /// [base] is the sequence number of the last operation that the text was
+  /// up to date with. The server uses it to merge this change with those
+  /// that other devices made to the same text at the same time.
+  static NoteOp? textChange(EditorPage page, {required int base}) {
+    final text = page.quill.controller.document.toDelta();
+    final change = page.syncedText.diff(text);
+    page.syncedText = text;
+    if (change.isEmpty) return null;
+    return {'t': textDeltaType, 'pg': page.id, 'd': change.toJson(), 'b': base};
+  }
+
+  /// Describes whether the note is a deck of flashcards.
+  static NoteOp flashcards(EditorCoreInfo coreInfo) => {
+    't': flashcardsType,
+    'on': coreInfo.flashcards,
+  };
+
+  /// Describes how well the user knows [page] as a flashcard.
+  static NoteOp study(EditorPage page) => {
+    't': studyType,
     'pg': page.id,
-    'q': page.quill.controller.document.toDelta().toJson(),
+    'c': page.study?.toJson(),
   };
 
   static Iterable<EditorImage> _imagesOf(EditorCoreInfo coreInfo) sync* {
@@ -298,6 +329,7 @@ abstract final class NoteOps {
           if (!skipImages.contains(image))
             ...addImage(image, page, coreInfo, sentAssets: sentAssets),
         if (!page.quill.controller.document.isEmpty()) text(page),
+        if (page.study != null) study(page),
       ];
     }
 
@@ -364,7 +396,10 @@ abstract final class NoteOps {
     Set<String> knownImageIds = const {},
     Set<EditorImage> skipImages = const {},
   }) {
-    final ops = <NoteOp>[backgroundPattern(coreInfo.backgroundPattern)];
+    final ops = <NoteOp>[
+      backgroundPattern(coreInfo.backgroundPattern),
+      if (coreInfo.flashcards) flashcards(coreInfo),
+    ];
     final sentAssets = <String>{};
     String? previousPageId;
     for (final page in coreInfo.pages) {
@@ -389,6 +424,7 @@ abstract final class NoteOps {
         );
       }
       if (!page.quill.controller.document.isEmpty()) ops.add(text(page));
+      if (page.study != null) ops.add(study(page));
       previousPageId = page.id;
     }
     return ops;
@@ -541,6 +577,27 @@ class NoteOpApplier {
         );
         if (overridden) return;
         _setText(pageId, op['q'] as List, keepLocalText: keepLocalText);
+      case NoteOps.flashcardsType:
+        final overridden = pendingLocalOps.any(
+          (pending) => pending['t'] == NoteOps.flashcardsType,
+        );
+        if (overridden) return;
+        coreInfo.flashcards = op['on'] == true;
+      case NoteOps.studyType:
+        final pageId = op['pg'] as String;
+        final overridden = pendingLocalOps.any(
+          (pending) =>
+              pending['t'] == NoteOps.studyType && pending['pg'] == pageId,
+        );
+        if (overridden) return;
+        final index = _indexOfPage(pageId);
+        if (index < 0) return;
+        coreInfo.pages[index].study = op['c'] != null
+            ? StudyState.fromJson(op['c'] as Map)
+            : null;
+      case NoteOps.textDeltaType:
+        // [RealtimeSession] merges these with the local changes first
+        applyTextChange(op['pg'] as String, Delta.fromJson(op['d'] as List));
       default:
         // probably from a newer version of the app
         log.warning('Unknown operation type: ${op['t']}');
@@ -718,6 +775,25 @@ class NoteOpApplier {
         ..delete(current.length);
     }
     if (change.isEmpty) return;
+    _composeText(page, change);
+    createPage(pageIndex);
+  }
+
+  /// Returns the page with id [pageId], creating it if needed.
+  EditorPage pageForText(String pageId) =>
+      coreInfo.pages[_materializePage(pageId)];
+
+  /// Applies a [change] that another device made to the text of a page,
+  /// after it has been transformed to apply to the text as it is here.
+  void applyTextChange(String pageId, Delta change) {
+    if (change.isEmpty) return;
+    final pageIndex = _materializePage(pageId);
+    _composeText(coreInfo.pages[pageIndex], change);
+    createPage(pageIndex);
+  }
+
+  void _composeText(EditorPage page, Delta change) {
+    final controller = page.quill.controller;
 
     // Undoing is for the user's own changes, so this one isn't recorded.
     final history = controller.document.history..ignoreChange = true;
@@ -728,7 +804,7 @@ class NoteOpApplier {
     }
     history.transform(change);
 
-    createPage(pageIndex);
+    page.syncedText = controller.document.toDelta();
   }
 
   void _insertPage(NoteOp op) {

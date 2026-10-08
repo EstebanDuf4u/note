@@ -63,7 +63,7 @@ jobs:
         run: |
           keychain initialize
 
-          app-store-connect fetch-signing-files com.adilhanney.saber \
+          app-store-connect fetch-signing-files fr.noryx.noteplus \
             --platform IOS \
             --type IOS_APP_STORE \
             --certificate-key=@env:APP_STORE_CERTIFICATE_KEY \

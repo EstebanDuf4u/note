@@ -38,6 +38,12 @@ class _OtherDevice {
   final messages = <Map<String, dynamic>>[];
   var _lastOpId = 0;
 
+  /// The sequence number of the last operation that this device received.
+  int get lastSeq => messages
+      .where((message) => message['k'] == 'op')
+      .map((message) => opInt(message['seq']))
+      .fold(0, (a, b) => a > b ? a : b);
+
   Iterable<NoteOp> get ops => messages
       .where((message) => message['k'] == 'op')
       .map((message) => Map<String, dynamic>.from(message['d'] as Map));
@@ -172,22 +178,24 @@ void main() {
     final page = editorState.coreInfo.pages.first;
     other.messages.clear();
     page.quill.controller.replaceText(0, 0, 'Hello', null);
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
     await until(() => other.ops.isNotEmpty, 'the text to be sent');
-    expect(other.ops.single['t'], NoteOps.textType);
+    expect(other.ops.single['t'], NoteOps.textDeltaType);
     expect(other.ops.single['pg'], page.id);
-    expect(other.ops.single['q'], [
-      {'insert': 'Hello\n'},
+    expect(other.ops.single['d'], [
+      {'insert': 'Hello'},
     ]);
 
     // text from the other device appears in the editor,
     // and isn't something that this device can undo
     final undoableChanges = editorState.history.canUndo;
     other.sendOp({
-      't': NoteOps.textType,
+      't': NoteOps.textDeltaType,
       'pg': page.id,
-      'q': [
-        {'insert': 'Hello from afar\n'},
+      'b': other.lastSeq,
+      'd': [
+        {'retain': 5},
+        {'insert': ' from afar'},
       ],
     });
     await until(
@@ -197,7 +205,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(editorState.history.canUndo, undoableChanges);
     expect(
-      other.ops.where((op) => op['t'] == NoteOps.textType),
+      other.ops.where((op) => op['t'] == NoteOps.textDeltaType),
       hasLength(1),
       reason: "The other device's text shouldn't be sent back to it",
     );
