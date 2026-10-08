@@ -98,12 +98,49 @@ class CanvasGestureDetector extends StatefulWidget {
     return top;
   }
 
+  /// Whether the pages are side by side, one per screen, rather than one
+  /// below the other. Swiping then turns the pages one at a time.
+  static bool get horizontalPaging => stows.editorHorizontalPaging.value;
+
+  /// The index of the page that is shown when [horizontalPaging],
+  /// with each page taking up [screenWidth] at a scale of 1.
+  static int horizontalPageIndex({
+    required Matrix4 transform,
+    required double screenWidth,
+    required int pageCount,
+  }) {
+    final slot = screenWidth * transform.approxScale;
+    if (slot <= 0 || pageCount <= 0) return 0;
+    final center = -transform.getTranslation().x + screenWidth / 2;
+    return (center / slot).floor().clamp(0, pageCount - 1);
+  }
+
+  /// Where the view goes so that it shows page [pageIndex]
+  /// when [horizontalPaging], centered if the [scale] makes it small.
+  static Offset horizontalPageTranslation({
+    required int pageIndex,
+    required double scale,
+    required Size screenSize,
+  }) => Offset(
+    -pageIndex * screenSize.width * scale +
+        (screenSize.width - screenSize.width * scale) / 2,
+    max(0, (screenSize.height - screenSize.height * scale) / 2),
+  );
+
   static void scrollToPage({
     required int pageIndex,
     required List<EditorPage> pages,
     required double screenWidth,
     required TransformationController transformationController,
   }) {
+    if (horizontalPaging) {
+      transformationController.value = Matrix4.translationValues(
+        -pageIndex * screenWidth,
+        0,
+        0,
+      );
+      return;
+    }
     final topOfPage = -CanvasGestureDetector.getTopOfPage(
       pageIndex: pageIndex,
       pages: pages,
@@ -508,6 +545,14 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
 
                   // Smoother scrolling fling gesture than the default
                   interactionEndFrictionCoefficient: 0.1,
+                  snapPan: CanvasGestureDetector.horizontalPaging
+                      ? (translation, velocity, scale) => _snapToPage(
+                          translation,
+                          velocity,
+                          scale,
+                          containerBounds.biggest,
+                        )
+                      : null,
 
                   // we need a non-zero boundary margin so we can zoom out
                   // past the size of the page (for minScale < 1)
@@ -531,6 +576,7 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
                       placeholderPageBuilder: widget.placeholderPageBuilder,
                       boundingBox: _axisAlignedBoundingBox(viewport),
                       containerWidth: containerBounds.maxWidth,
+                      containerHeight: containerBounds.maxHeight,
                     );
                   },
                 );
@@ -577,6 +623,35 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     super.dispose();
   }
 
+  /// Returns where the view should settle after a swipe that ended with
+  /// [velocity], when the pages are side by side: on the next or previous
+  /// page after a quick swipe, otherwise on the page that is mostly shown.
+  /// Zoomed in, the page can be panned freely.
+  Offset? _snapToPage(
+    Offset translation,
+    Offset velocity,
+    double scale,
+    Size screenSize,
+  ) {
+    if (scale > 1.05) return null;
+    final slot = screenSize.width * scale;
+    final position = (screenSize.width / 2 - translation.dx) / slot - 0.5;
+    const swipeVelocity = 300;
+    final int pageIndex;
+    if (velocity.dx < -swipeVelocity) {
+      pageIndex = position.floor() + 1;
+    } else if (velocity.dx > swipeVelocity) {
+      pageIndex = position.ceil() - 1;
+    } else {
+      pageIndex = position.round();
+    }
+    return CanvasGestureDetector.horizontalPageTranslation(
+      pageIndex: pageIndex.clamp(0, max(0, widget.pages.length - 1)),
+      scale: scale,
+      screenSize: screenSize,
+    );
+  }
+
   /// Returns the axis aligned bounding box for the given Quad,
   /// which might not be axis aligned.
   /// From https://api.flutter.dev/flutter/widgets/InteractiveViewer/builder.html
@@ -604,6 +679,7 @@ class _PagesBuilder extends StatelessWidget {
     required this.placeholderPageBuilder,
     required this.boundingBox,
     required this.containerWidth,
+    required this.containerHeight,
   });
 
   final List<EditorPage> pages;
@@ -611,10 +687,42 @@ class _PagesBuilder extends StatelessWidget {
   final Widget Function(BuildContext context, int pageIndex)
   placeholderPageBuilder;
   final Rect boundingBox;
-  final double containerWidth;
+  final double containerWidth, containerHeight;
+
+  /// Lays out the pages side by side, each one fitted to the screen.
+  Widget _buildHorizontal(BuildContext context) {
+    return Row(
+      crossAxisAlignment: .start,
+      children: [
+        for (int pageIndex = 0; pageIndex < pages.length; pageIndex++)
+          () {
+            final page = pages[pageIndex];
+            final left = pageIndex * containerWidth;
+            final isInViewport =
+                boundingBox.right >= left &&
+                boundingBox.left <= left + containerWidth;
+            final shouldRender = page.quill.focusNode.hasFocus || isInViewport;
+            page.isRendered = shouldRender;
+            return SizedBox(
+              width: containerWidth,
+              height: containerHeight,
+              child: Padding(
+                padding: const .all(Editor.gapBetweenPages * 2),
+                child: shouldRender
+                    ? pageBuilder(context, pageIndex)
+                    : placeholderPageBuilder(context, pageIndex),
+              ),
+            );
+          }(),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (CanvasGestureDetector.horizontalPaging && containerHeight.isFinite) {
+      return _buildHorizontal(context);
+    }
     final List<Widget> children = [
       const SizedBox.square(dimension: Editor.gapBetweenPages),
       const SizedBox.square(dimension: Editor.gapBetweenPages),

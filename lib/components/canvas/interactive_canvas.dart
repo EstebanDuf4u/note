@@ -10,6 +10,7 @@ library;
 
 // ignore_for_file: omit_obvious_property_types
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show clampDouble;
@@ -49,6 +50,7 @@ class InteractiveCanvasViewer extends StatefulWidget {
     this.transformationController,
     this.alignment,
     this.trackpadScrollCausesScale = false,
+    this.snapPan,
     required Widget this.child,
   }) : assert(minScale > 0),
        assert(interactionEndFrictionCoefficient > 0),
@@ -96,6 +98,7 @@ class InteractiveCanvasViewer extends StatefulWidget {
     this.transformationController,
     this.alignment,
     this.trackpadScrollCausesScale = false,
+    this.snapPan,
     required InteractiveCanvasViewerWidgetBuilder this.builder,
   }) : assert(minScale > 0),
        assert(interactionEndFrictionCoefficient > 0),
@@ -226,6 +229,13 @@ class InteractiveCanvasViewer extends StatefulWidget {
 
   /// {@macro flutter.gestures.scale.trackpadScrollCausesScale}
   final bool trackpadScrollCausesScale;
+
+  /// If given, where the view moves to at the end of a pan, instead of
+  /// drifting to a stop: it's given the translation of the view, the speed
+  /// of the pan and the scale, and returns the translation to animate to,
+  /// or null to drift as usual. The mouse wheel then pans sideways.
+  final Offset? Function(Offset translation, Offset velocity, double scale)?
+  snapPan;
 
   /// Determines the amount of scale to be performed per pointer scroll.
   ///
@@ -868,6 +878,7 @@ class _InteractiveCanvasViewerState extends State<InteractiveCanvasViewer>
 
     switch (_gestureType) {
       case _GestureType.pan:
+        if (_snapTo(details.velocity.pixelsPerSecond)) return;
         if (details.velocity.pixelsPerSecond.distance < kMinFlingVelocity) {
           _currentAxis = null;
           return;
@@ -928,6 +939,35 @@ class _InteractiveCanvasViewerState extends State<InteractiveCanvasViewer>
     }
   }
 
+  /// Animates the view to where [InteractiveCanvasViewer.snapPan] says,
+  /// and returns whether it did.
+  bool _snapTo(Offset velocity) {
+    final snapPan = widget.snapPan;
+    if (snapPan == null) return false;
+    final translationVector = _transformer.value.getTranslation();
+    final translation = Offset(translationVector.x, translationVector.y);
+    final target = snapPan(
+      translation,
+      velocity,
+      _transformer.value.getMaxScaleOnAxis(),
+    );
+    if (target == null) return false;
+
+    _animation?.removeListener(_handleInertiaAnimation);
+    _controller.reset();
+    _animation = Tween<Offset>(
+      begin: translation,
+      end: target,
+    ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_controller);
+    _controller.duration = const Duration(milliseconds: 280);
+    _animation!.addListener(_handleInertiaAnimation);
+    _controller.forward();
+    return true;
+  }
+
+  /// Snaps the view once the mouse wheel has stopped turning.
+  Timer? _wheelSnapTimer;
+
   // Handle mousewheel and web trackpad scroll events.
   void _receivedPointerSignal(PointerSignalEvent event) {
     final Offset local = event.localPosition;
@@ -939,9 +979,19 @@ class _InteractiveCanvasViewerState extends State<InteractiveCanvasViewer>
         // Scroll without Ctrl pressed, so treat it as a pan.
         if (!_gestureIsSupported(_GestureType.pan)) return;
 
+        var scrollDelta = event.scrollDelta;
+        if (widget.snapPan != null) {
+          // pages are side by side, so the wheel turns them
+          if (scrollDelta.dx == 0) scrollDelta = Offset(scrollDelta.dy, 0);
+          _wheelSnapTimer?.cancel();
+          _wheelSnapTimer = Timer(
+            const Duration(milliseconds: 150),
+            () => _snapTo(.zero),
+          );
+        }
         final Offset localDelta = PointerEvent.transformDeltaViaPositions(
-          untransformedEndPosition: global + event.scrollDelta,
-          untransformedDelta: event.scrollDelta,
+          untransformedEndPosition: global + scrollDelta,
+          untransformedDelta: scrollDelta,
           transform: event.transform,
         );
 
@@ -1067,6 +1117,7 @@ class _InteractiveCanvasViewerState extends State<InteractiveCanvasViewer>
 
   @override
   void dispose() {
+    _wheelSnapTimer?.cancel();
     _controller.dispose();
     _scaleController.dispose();
     _transformer.removeListener(_handleTransformation);

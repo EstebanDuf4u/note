@@ -411,6 +411,14 @@ class Stows {
   /// to the index of the cover's color. See [NoteLibrary].
   final noteCovers = PlainStow('noteCovers', '{}', volatile: !_isOnMainIsolate);
 
+  /// Whether the editor shows one page at a time, side by side,
+  /// rather than one below the other.
+  final editorHorizontalPaging = PlainStow(
+    'editorHorizontalPaging',
+    false,
+    volatile: !_isOnMainIsolate,
+  );
+
   /// Whether the eraser only erases what's under it,
   /// rather than every stroke it touches.
   final eraserPartial = PlainStow(

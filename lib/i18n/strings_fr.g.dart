@@ -254,6 +254,8 @@ class _Translations$editor$fr extends Translations$editor$en {
 
 	// Translations
 	@override late final _Translations$editor$flashcards$fr flashcards = _Translations$editor$flashcards$fr._(_root);
+	@override String get turnPages => 'Tourner les pages une à une';
+	@override String get scrollContinuously => 'Faire défiler les pages';
 	@override String get pagePanel => 'Miniatures des pages';
 	@override late final _Translations$editor$realtime$fr realtime = _Translations$editor$realtime$fr._(_root);
 	@override late final _Translations$editor$toolbar$fr toolbar = _Translations$editor$toolbar$fr._(_root);

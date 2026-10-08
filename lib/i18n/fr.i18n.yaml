@@ -331,6 +331,8 @@ editor:
     days: $n j
     months: $n mois
     years: $n an(s)
+  turnPages: Tourner les pages une à une
+  scrollContinuously: Faire défiler les pages
   pagePanel: Miniatures des pages
   realtime:
     offline: Synchro temps réel hors ligne. Vos modifications seront envoyées à la reconnexion.
