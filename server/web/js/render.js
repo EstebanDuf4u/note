@@ -245,7 +245,7 @@ function elementOf(image, note, onLoad) {
   return element.complete && element.naturalWidth ? element : null;
 }
 
-function drawImage(ctx, note, page, image, onLoad, background) {
+export function drawImage(ctx, note, page, image, onLoad, background) {
   const element = elementOf(image, note, onLoad);
   let { x, y, w, h } = image;
   if (background) {
@@ -324,7 +324,9 @@ export function drawPage(ctx, note, page, { onImageLoad, selected, hidden } = {}
   if (page.backgroundImage) {
     drawImage(ctx, note, page, page.backgroundImage, onImageLoad, true);
   }
-  for (const image of page.images) drawImage(ctx, note, page, image, onImageLoad, false);
+  for (const image of page.images) {
+    if (!hidden?.has(image)) drawImage(ctx, note, page, image, onImageLoad, false);
+  }
   drawText(ctx, page);
 
   // Highlighters are drawn in a layer that darkens what's below it,

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'dart:ui';
+
 import 'package:bson/bson.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
@@ -55,5 +57,16 @@ void main() {
     expect(bounds.center.dx, closeTo(30, 6));
     expect(bounds.center.dy, closeTo(40, 6));
     expect(pages.first.bookmark, 'Web');
+
+    final image = pages.first.images.single;
+    expect(image.uid, 'webImage1');
+    // moved by the update after it was added
+    expect(image.dstRect, const Rect.fromLTWH(120, 200, 300, 150));
+
+    expect(coreInfo.flashcards, isTrue);
+    final study = pages.first.study!;
+    expect(study.repetitions, 1);
+    expect(study.intervalDays, 1);
+    expect(study.due, DateTime.utc(2026, 10, 9));
   });
 }

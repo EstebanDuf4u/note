@@ -43,6 +43,8 @@ const paths = {
     '<path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M16 2v20"/>',
   cloudOff:
     '<path d="M2 2l20 20"/><path d="M5.8 5.8A7 7 0 0 0 4 13.6 4.5 4.5 0 0 0 6.5 22h11a4.5 4.5 0 0 0 1.4-.2"/><path d="M21.5 17.5A4.5 4.5 0 0 0 17.5 11h-1.8A7 7 0 0 0 9 5.2"/>',
+  photo:
+    '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
   cards:
     '<rect x="2" y="6" width="15" height="14" rx="2"/><path d="M6 6V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-3"/><path d="M2 13h15"/>',
   sparkles:
