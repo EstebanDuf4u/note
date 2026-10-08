@@ -241,3 +241,53 @@ export function straighten(stroke) {
 }
 
 export { Stroke };
+
+/**
+ * Recognizes the shape that `points` were drawn as: a circle, a rectangle
+ * or a straight line, or null if it's none of them.
+ */
+export function recognizeShape(points) {
+  if (points.length < 3) return null;
+  const b = pointsBounds(points);
+  const width = b.right - b.left;
+  const height = b.bottom - b.top;
+  const size = Math.max(width, height);
+  if (size < 12) return null;
+
+  let length = 0;
+  for (let i = 1; i < points.length; i++) {
+    length += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  }
+  const [x0, y0] = points[0];
+  const [x1, y1] = points[points.length - 1];
+  const closed = Math.hypot(x1 - x0, y1 - y0) < Math.max(20, length * 0.15);
+
+  if (!closed) {
+    const straight = points.every(
+      ([x, y]) => Math.sqrt(sqrDistanceToSegment(x, y, x0, y0, x1, y1)) < Math.max(4, size * 0.08),
+    );
+    return straight ? { kind: 'line' } : null;
+  }
+
+  // a circle: every point is about as far from the middle
+  const cx = (b.left + b.right) / 2;
+  const cy = (b.top + b.bottom) / 2;
+  const radii = points.map(([x, y]) => Math.hypot(x - cx, y - cy));
+  const mean = radii.reduce((sum, r) => sum + r, 0) / radii.length;
+  const deviation = Math.sqrt(radii.reduce((sum, r) => sum + (r - mean) ** 2, 0) / radii.length);
+  const ratio = Math.min(width, height) / size;
+  if (deviation / mean < 0.13 && ratio > 0.75) {
+    return { kind: 'circle', cx, cy, r: mean };
+  }
+
+  // a rectangle: most points are close to an edge of the box
+  const tolerance = Math.max(6, Math.min(width, height) * 0.14);
+  const nearEdge = points.filter(
+    ([x, y]) =>
+      Math.min(Math.abs(x - b.left), Math.abs(x - b.right), Math.abs(y - b.top), Math.abs(y - b.bottom)) <= tolerance,
+  ).length;
+  if (nearEdge / points.length > 0.85 && Math.min(width, height) > 10) {
+    return { kind: 'rect', rl: b.left, rt: b.top, rw: width, rh: height };
+  }
+  return null;
+}

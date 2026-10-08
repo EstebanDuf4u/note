@@ -170,6 +170,8 @@ export function renderLibrary(root, { onOpen, onSignedOut }) {
   let notes = [];
   let shared = [];
   let loading = true;
+  /** Whether each note is a favorite and its cover, synced with the app. */
+  let entries = {};
 
   const search = h('input', {
     placeholder: 'Rechercher',
@@ -241,7 +243,7 @@ export function renderLibrary(root, { onOpen, onSignedOut }) {
   async function load() {
     try {
       const [list, library] = await Promise.all([Api.notes(), Api.library().catch(() => ({ entries: {} }))]);
-      const entries = library.entries ?? {};
+      entries = library.entries ?? {};
       notes = list.notes
         .map((note) => ({
           path: note.path,
@@ -274,6 +276,17 @@ export function renderLibrary(root, { onOpen, onSignedOut }) {
         {},
         h('button', { onclick: () => close('open') }, icon('notebook'), 'Ouvrir'),
         note.shared
+          ? null
+          : [
+              h(
+                'button',
+                { onclick: () => close('favorite') },
+                icon('bookmark', { filled: note.favorite }),
+                note.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+              ),
+              h('button', { onclick: () => close('cover') }, icon('palette'), 'Couverture'),
+            ],
+        note.shared
           ? h('button.danger', { onclick: () => close('leave') }, icon('logout'), 'Retirer de mes notes')
           : [
               h('button', { onclick: () => close('share') }, icon('link'), 'Copier le lien de partage'),
@@ -282,6 +295,28 @@ export function renderLibrary(root, { onOpen, onSignedOut }) {
       ),
     ]);
     if (choice === 'open') onOpen(note);
+    if (choice === 'favorite') await setEntry(note, { f: !note.favorite });
+    if (choice === 'cover') {
+      const cover = await sheet((close) => [
+        h('h2', {}, 'Couverture'),
+        h(
+          'div.swatches.covers',
+          { style: { margin: '8px 0 14px', gridTemplateColumns: 'repeat(6, 1fr)' } },
+          h(
+            'button.paper-cover' + (note.cover ? '' : '.selected'),
+            { onclick: () => close(-1), title: 'Aperçu de la page', 'aria-label': 'Sans couverture' },
+          ),
+          COVER_COLORS.map((color, index) =>
+            h('button' + (note.cover === color ? '.selected' : ''), {
+              style: { background: color },
+              'aria-label': 'Couleur de couverture',
+              onclick: () => close(index),
+            }),
+          ),
+        ),
+      ]);
+      if (cover !== undefined) await setEntry(note, { c: cover });
+    }
     if (choice === 'share') await copyShareLink(note.path);
     if (choice === 'delete') {
       const ok = await confirm({
@@ -308,6 +343,20 @@ export function renderLibrary(root, { onOpen, onSignedOut }) {
       } catch (e) {
         toast(errorMessage(e));
       }
+    }
+  }
+
+  /** Changes the favorite or cover of `note`, for all the user's devices. */
+  async function setEntry(note, change) {
+    const previous = entries[note.path] ?? { f: !!note.favorite, c: -1, t: 0 };
+    // later than the last change, even if this device's clock is behind
+    const entry = { ...previous, ...change, t: Math.max(Date.now(), (previous.t ?? 0) + 1) };
+    try {
+      const result = await Api.library({ [note.path]: entry });
+      entries = result.entries ?? entries;
+      await load();
+    } catch (e) {
+      toast(errorMessage(e));
     }
   }
 
