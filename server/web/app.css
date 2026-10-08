@@ -1526,3 +1526,83 @@ button {
   width: 18px;
   height: 18px;
 }
+
+.elements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.element {
+  position: relative;
+}
+
+.element .preview {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  outline: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.element .preview canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.element .remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.9);
+  color: #555;
+}
+
+.element .remove .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.text-editor {
+  width: 100%;
+  min-height: 200px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: #17171f;
+  font-family: 'Neucha', cursive;
+  font-size: 22px;
+  line-height: 1.4;
+  resize: vertical;
+  outline: none;
+}
+
+.text-editor:focus {
+  border-color: var(--brand);
+}
+
+@media (max-width: 430px) {
+  .selection-bar .label {
+    display: none;
+  }
+
+  .selection-bar button {
+    padding: 0 11px;
+  }
+
+  .selection-bar .icon {
+    width: 20px;
+    height: 20px;
+  }
+}

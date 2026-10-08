@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:bson/bson.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:saber/components/canvas/_circle_stroke.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/flavor_config.dart';
@@ -43,14 +44,18 @@ void main() {
     }
 
     final strokes = pages.first.strokes;
-    expect(strokes.map((s) => s.id), ['webStroke1', 'webStroke2']);
-    final highlighter = strokes.first;
+    expect(strokes.map((s) => s.id), containsAll(['webStroke1', 'webStroke2']));
+    final circle = strokes.whereType<CircleStroke>().single;
+    expect(circle.id, 'webCircle');
+    expect(circle.center, const Offset(500, 600));
+    expect(circle.radius, 80);
+    final highlighter = strokes.firstWhere((s) => s.id == 'webStroke1');
     expect(highlighter.toolId, ToolId.highlighter);
     expect(highlighter.color.toARGB32(), 0x64ffeb3b);
     expect(highlighter.options.size, 50);
     expect(highlighter.pressureEnabled, isFalse);
 
-    final pen = strokes.last;
+    final pen = strokes.firstWhere((s) => s.id == 'webStroke2');
     // scaled by 2 around 10,20
     expect(pen.options.size, 10);
     final bounds = pen.lowQualityPath.getBounds();

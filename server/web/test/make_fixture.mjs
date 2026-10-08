@@ -17,6 +17,10 @@ const highlighter = new Stroke({
 const pen = new Stroke({
   id: 'webStroke2', points: [[10, 20, 0.25], [30, 40, 0.75]], options: { ...options, s: 5 },
 });
+const circle = new Stroke({
+  id: 'webCircle', tool: 'ShapePen', pressureEnabled: false, shape: 'circle',
+  cx: 500, cy: 600, r: 80, options: { ...options, s: 4 },
+});
 page.bookmark = 'Web';
 
 // a 1x1 png
@@ -30,6 +34,7 @@ page.study = graded(null, 'good', Date.UTC(2026, 9, 8));
 const ops = [
   Ops.addStroke(page, highlighter),
   Ops.addStroke(page, pen),
+  Ops.addStroke(page, circle),
   Ops.scaleStrokes([pen], 10, 20, 2),
   Ops.bookmark(page),
   ...Ops.addImage(page, image),
