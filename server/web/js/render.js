@@ -320,6 +320,7 @@ function drawText(ctx, page) {
  */
 export function drawPage(ctx, note, page, { onImageLoad, selected, hidden } = {}) {
   drawBackground(ctx, note, page);
+  if (note.flashcards) drawCardDivider(ctx, page);
   if (page.backgroundImage) {
     drawImage(ctx, note, page, page.backgroundImage, onImageLoad, true);
   }
@@ -353,6 +354,19 @@ export function drawPage(ctx, note, page, { onImageLoad, selected, hidden } = {}
     if (stroke.tool === Tools.highlighter || hidden?.has(stroke)) continue;
     drawStroke(ctx, stroke, { selected: selected?.has(stroke) });
   }
+}
+
+/** In flashcards mode, a dashed line splits the question from the answer. */
+function drawCardDivider(ctx, page) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(79, 70, 229, 0.45)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([14, 10]);
+  ctx.beginPath();
+  ctx.moveTo(0, page.height / 2);
+  ctx.lineTo(page.width, page.height / 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 let layerCanvas;

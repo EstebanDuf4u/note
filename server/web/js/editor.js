@@ -14,6 +14,7 @@ import { copyShareLink, errorMessage, PAPERS } from './library.js';
 import { Note, Ops, Page, Stroke, Tools, newId } from './model.js';
 import { boundsOf, cssColor, drawPage, drawStroke, smoothPath, strokePolygon } from './render.js';
 import { Session } from './session.js';
+import { study } from './study.js';
 import { colorOf, confirm, h, icon, initials, prompt, sheet, toast } from './ui.js';
 
 const GAP = 36; // between pages, in page units
@@ -174,6 +175,11 @@ export class Editor {
         'div.actions',
         {},
         this.presenceEl,
+        (this.studyButton = h(
+          'button.icon-btn.study-btn',
+          { onclick: () => this.study(), 'aria-label': 'Réviser', title: 'Réviser', hidden: true },
+          icon('cards'),
+        )),
         this.undoButton,
         this.redoButton,
         h(
@@ -591,6 +597,7 @@ export class Editor {
   }
 
   afterRemoteChange() {
+    this.renderHeaderActions();
     if (this.selection && !this.note.pages.includes(this.selection.page)) this.clearSelection();
     this.requestFrame();
   }
@@ -1612,6 +1619,16 @@ export class Editor {
         h('button', { onclick: () => close('add') }, icon('plus'), 'Ajouter une page', h('span.hint', {}, `après la ${index + 1}`)),
         h('button', { onclick: () => close('bookmark') }, icon('bookmark', { filled: bookmarked }), bookmarked ? 'Retirer le signet' : 'Ajouter un signet'),
         h('button', { onclick: () => close('paper') }, icon('paper'), 'Fond de page'),
+        h(
+          'button',
+          { onclick: () => close('flashcards') },
+          icon('cards'),
+          'Fiches de révision',
+          h('span.hint', {}, this.note.flashcards ? 'activé' : 'désactivé'),
+        ),
+        this.note.flashcards
+          ? h('button', { onclick: () => close('study') }, icon('sparkles'), 'Réviser')
+          : null,
         this.options.share
           ? null
           : h('button', { onclick: () => close('share') }, icon('share'), 'Partager'),
@@ -1622,8 +1639,35 @@ export class Editor {
     if (choice === 'add') this.addPageAfter(index);
     if (choice === 'bookmark') this.toggleBookmark(index);
     if (choice === 'paper') this.showPapers();
+    if (choice === 'flashcards') this.toggleFlashcards();
+    if (choice === 'study') this.study();
     if (choice === 'share') copyShareLink(this.options.path);
     if (choice === 'fit') this.fitWidth();
+  }
+
+  toggleFlashcards() {
+    const on = !this.note.flashcards;
+    const op = Ops.flashcards(on);
+    this.note.apply(clone(op));
+    this.commit([op], [Ops.flashcards(!on)]);
+    this.invalidateAll();
+    this.renderHeaderActions();
+    this.requestFrame();
+    toast(on ? 'Chaque page est une fiche : la question en haut, la réponse en bas.' : 'Fiches de révision désactivées');
+  }
+
+  study() {
+    study(this.note, {
+      onGraded: (page) => {
+        this.session.submit([Ops.study(page)]);
+        this.savePending();
+      },
+    });
+  }
+
+  /** The study button is shown while the note is in flashcards mode. */
+  renderHeaderActions() {
+    this.studyButton.hidden = !this.note.flashcards;
   }
 
   async showPapers() {

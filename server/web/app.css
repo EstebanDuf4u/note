@@ -1308,3 +1308,174 @@ button {
     height: 24px;
   }
 }
+
+/* Flashcards */
+
+.study {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  animation: fade 0.2s ease;
+  overflow-y: auto;
+}
+
+.study.closing {
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+
+.study-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--header);
+  padding: 0 12px;
+  flex: none;
+}
+
+.study-header strong {
+  flex: 1;
+  font-size: 17px;
+}
+
+.study-header .progress {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.study-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px 24px;
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.study .card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+  animation: rise 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card-half canvas {
+  display: block;
+}
+
+.card-half.answer {
+  border-top: 2px dashed rgba(79, 70, 229, 0.35);
+  animation: fade 0.25s ease;
+}
+
+.card-hidden {
+  display: grid;
+  place-items: center;
+  height: 120px;
+  border-top: 2px dashed rgba(79, 70, 229, 0.35);
+  color: #c4c4d4;
+  font-size: 44px;
+  font-weight: 800;
+  background: repeating-linear-gradient(135deg, #fafaff 0 12px, #f2f2fb 12px 24px);
+}
+
+.grades {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.grade {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.12s;
+}
+
+.grade:active {
+  transform: scale(0.95);
+}
+
+.grade strong {
+  font-size: 14px;
+}
+
+.grade span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.grade.again strong {
+  color: var(--danger);
+}
+
+.grade.hard strong {
+  color: var(--warning);
+}
+
+.grade.good strong {
+  color: var(--success);
+}
+
+.grade.easy strong {
+  color: var(--brand);
+}
+
+.study-done {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.study-done .art {
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.study-done .art .icon {
+  width: 40px;
+  height: 40px;
+}
+
+.study-done h2 {
+  margin: 4px 0 0;
+}
+
+.study-done p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+[hidden] {
+  display: none !important;
+}
