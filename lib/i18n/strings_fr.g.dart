@@ -42,6 +42,7 @@ class TranslationsFr extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$login$fr login = _Translations$login$fr._(_root);
 	@override late final _Translations$account$fr account = _Translations$account$fr._(_root);
 	@override late final _Translations$profile$fr profile = _Translations$profile$fr._(_root);
+	@override late final _Translations$elements$fr elements = _Translations$elements$fr._(_root);
 	@override late final _Translations$sharing$fr sharing = _Translations$sharing$fr._(_root);
 	@override late final _Translations$appInfo$fr appInfo = _Translations$appInfo$fr._(_root);
 	@override late final _Translations$update$fr update = _Translations$update$fr._(_root);
@@ -218,6 +219,20 @@ class _Translations$profile$fr extends Translations$profile$en {
 		_Translations$profile$faq$3$fr._(_root),
 	];
 	@override String quotaUsageUncapped({required Object used}) => 'Vous utilisez ${used}';
+}
+
+// Path: elements
+class _Translations$elements$fr extends Translations$elements$en {
+	_Translations$elements$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'Éléments';
+	@override String get save => 'Enregistrer comme élément';
+	@override String get saved => 'Ajouté à vos éléments';
+	@override String get delete => 'Supprimer cet élément';
+	@override String get empty => 'Sélectionnez de l\'écriture au lasso et enregistrez-la comme élément pour l\'ajouter à nouveau dans n\'importe quelle note.';
 }
 
 // Path: sharing

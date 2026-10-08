@@ -24,6 +24,7 @@ import 'package:saber/components/canvas/image/editor_image.dart';
 import 'package:saber/components/canvas/remote_cursors.dart';
 import 'package:saber/components/canvas/save_indicator.dart';
 import 'package:saber/components/editor/read_only_banner.dart';
+import 'package:saber/components/elements/elements_sheet.dart';
 import 'package:saber/components/sharing/share_dialog.dart';
 import 'package:saber/components/theming/adaptive_alert_dialog.dart';
 import 'package:saber/components/theming/adaptive_icon.dart';
@@ -40,6 +41,7 @@ import 'package:saber/data/editor/editor_exporter.dart';
 import 'package:saber/data/editor/editor_history.dart';
 import 'package:saber/data/editor/ids.dart';
 import 'package:saber/data/editor/page.dart';
+import 'package:saber/data/elements/element_library.dart';
 import 'package:saber/data/extensions/change_notifier_extensions.dart';
 import 'package:saber/data/extensions/matrix4_extensions.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
@@ -551,6 +553,68 @@ class EditorState extends State<Editor> {
     controller.dispose();
     if (result == null || !mounted) return;
     _setBookmark(pageIndex, result == '\u0000' ? null : result);
+  }
+
+  /// Adds new strokes like those of [element] to the middle of the page
+  /// that is shown.
+  void _addElement(NoteElement element) {
+    if (coreInfo.readOnly) return;
+    final pageIndex = currentPageIndex;
+    final page = coreInfo.pages[pageIndex];
+
+    // the middle of the screen, on the page
+    var center = page.size.center(.zero);
+    if (page.renderBox case final box? when box.attached) {
+      final screen = MediaQuery.sizeOf(context);
+      center = box.globalToLocal(screen.center(.zero));
+    }
+    final topLeft = Offset(
+      (center.dx - element.size.width / 2).clamp(
+        0,
+        max(0, page.size.width - element.size.width),
+      ),
+      (center.dy - element.size.height / 2).clamp(
+        0,
+        max(0, page.size.height - element.size.height),
+      ),
+    );
+
+    final strokes = element.createStrokes(
+      page: page,
+      pageIndex: pageIndex,
+      topLeft: topLeft,
+    );
+    setState(() {
+      strokes.forEach(page.insertStroke);
+      createPage(pageIndex);
+      history.recordChange(
+        EditorHistoryItem(
+          type: .draw,
+          pageIndex: pageIndex,
+          strokes: strokes,
+          images: const [],
+        ),
+      );
+    });
+    page.redrawStrokes();
+    autosaveAfterDelay();
+
+    // selected, so that it can be moved where it belongs
+    final select = Select.currentSelect;
+    currentTool = select;
+    var bounds = strokes.first.lowQualityPath.getBounds();
+    for (final stroke in strokes.skip(1)) {
+      bounds = bounds.expandToInclude(stroke.lowQualityPath.getBounds());
+    }
+    select
+      ..selectResult = SelectResult(
+        pageIndex: pageIndex,
+        strokes: strokes,
+        images: [],
+        path: Path()..addRect(bounds.inflate(8)),
+      )
+      ..doneSelecting = true;
+    setState(() {});
   }
 
   /// Lets the user study this note's pages as flashcards.
@@ -1967,6 +2031,14 @@ class EditorState extends State<Editor> {
               autosaveAfterDelay();
             });
           },
+          saveSelectionAsElement: () {
+            final select = currentTool as Select;
+            if (!select.doneSelecting) return;
+            if (ElementLibrary.add(select.selectResult.strokes) == null) return;
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(t.elements.saved)));
+          },
+          showElements: () => ElementsSheet.show(context, _addElement),
           deleteSelection: () {
             final select = currentTool as Select;
             if (!select.doneSelecting) {

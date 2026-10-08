@@ -44,6 +44,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$login$en login = Translations$login$en.internal(_root);
 	late final Translations$account$en account = Translations$account$en.internal(_root);
 	late final Translations$profile$en profile = Translations$profile$en.internal(_root);
+	late final Translations$elements$en elements = Translations$elements$en.internal(_root);
 	late final Translations$sharing$en sharing = Translations$sharing$en.internal(_root);
 	late final Translations$appInfo$en appInfo = Translations$appInfo$en.internal(_root);
 	late final Translations$update$en update = Translations$update$en.internal(_root);
@@ -332,6 +333,30 @@ class Translations$profile$en {
 		Translations$profile$faq$2$en.internal(_root),
 		Translations$profile$faq$3$en.internal(_root),
 	];
+}
+
+// Path: elements
+class Translations$elements$en {
+	Translations$elements$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Elements'
+	String get title => 'Elements';
+
+	/// en: 'Save as an element'
+	String get save => 'Save as an element';
+
+	/// en: 'Saved to your elements'
+	String get saved => 'Saved to your elements';
+
+	/// en: 'Delete this element'
+	String get delete => 'Delete this element';
+
+	/// en: 'Select handwriting with the lasso and save it as an element to add it again to any note.'
+	String get empty => 'Select handwriting with the lasso and save it as an element to add it again to any note.';
 }
 
 // Path: sharing

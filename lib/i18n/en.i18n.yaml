@@ -297,6 +297,12 @@ profile:
       Tap on the "@:profile.quickLinks.deleteAccount" button above, and login if needed.
       If you are using the official Saber server, your account will be deleted after a 1 week grace period. You can contact me at adilhanney@disroot.org during this period to cancel the deletion.
       If you are using a third party server, there might not be an option to delete your account: you'll need to consult the server's privacy policy for more information.
+elements:
+  title: Elements
+  save: Save as an element
+  saved: Saved to your elements
+  delete: Delete this element
+  empty: Select handwriting with the lasso and save it as an element to add it again to any note.
 sharing:
   title: Share
   description: Anyone with the link can open this note and write in it with you, as it happens. They need an account on your server.

@@ -50,6 +50,8 @@ class Toolbar extends StatefulWidget {
     required this.paste,
     required this.duplicateSelection,
     required this.deleteSelection,
+    required this.saveSelectionAsElement,
+    required this.showElements,
     required this.exportAsSba,
     required this.exportAsPdf,
     required this.exportAsPng,
@@ -78,6 +80,8 @@ class Toolbar extends StatefulWidget {
 
   final VoidCallback duplicateSelection;
   final VoidCallback deleteSelection;
+  final VoidCallback saveSelectionAsElement;
+  final VoidCallback showElements;
 
   final Future Function(BuildContext)? exportAsSba;
   final Future Function(BuildContext)? exportAsPdf;
@@ -253,6 +257,7 @@ class _ToolbarState extends State<Toolbar> {
               .select => SelectionBar(
                 duplicateSelection: widget.duplicateSelection,
                 deleteSelection: widget.deleteSelection,
+                saveSelectionAsElement: widget.saveSelectionAsElement,
               ),
             },
           );
@@ -488,6 +493,13 @@ class _ToolbarState extends State<Toolbar> {
                 },
                 padding: buttonPadding,
                 child: const FaIcon(FontAwesomeIcons.eraser, size: 16),
+              ),
+              ToolbarIconButton(
+                tooltip: t.elements.title,
+                enabled: !widget.readOnly,
+                onPressed: widget.showElements,
+                padding: buttonPadding,
+                child: const Icon(Icons.interests_outlined),
               ),
               ToolbarIconButton(
                 tooltip: t.editor.toolbar.photo,
