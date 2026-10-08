@@ -82,7 +82,7 @@ class _BrowseApp extends StatelessWidget {
     );
     return TranslationProvider(
       child: ExplicitlyThemedApp(
-        title: 'Saber',
+        title: 'Note+',
         router: router,
         themeMode: ThemeMode.light,
         theme: theme,

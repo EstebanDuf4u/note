@@ -66,7 +66,7 @@ class _BrowseApp extends StatelessWidget {
     BrowsePage.overrideChildren = children;
     return ScreenshotApp.withConditionalTitlebar(
       device: GoldenSmallDevices.androidPhone.device,
-      title: 'Saber',
+      title: 'Note+',
       theme: SaberTheme.createThemeFromSeed(Colors.yellow, .light, .android),
       home: BrowsePage(path: path),
     );

@@ -72,7 +72,7 @@ class _LogsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ScreenshotApp.withConditionalTitlebar(
       device: GoldenSmallDevices.androidPhone.device,
-      title: 'Saber',
+      title: 'Note+',
       home: const LogsPage(),
     );
   }

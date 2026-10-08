@@ -37,7 +37,7 @@ void main() {
 
       final widget = ScreenshotApp.withConditionalTitlebar(
         device: device,
-        title: 'Saber',
+        title: 'Note+',
         home: TranslationProvider(
           child: const HomePage(subpage: HomePage.recentSubpage, path: ''),
         ),
