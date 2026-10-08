@@ -563,4 +563,6 @@ export const Ops = {
   movePage: (page, afterId) => ({ t: 'mp', id: page.id, after: afterId ?? null }),
   backgroundPattern: (pattern) => ({ t: 'bg', p: pattern }),
   bookmark: (page) => ({ t: 'bm', pg: page.id, b: page.bookmark }),
+  flashcards: (on) => ({ t: 'fl', on }),
+  study: (page) => ({ t: 'fc', pg: page.id, c: page.study }),
 };
