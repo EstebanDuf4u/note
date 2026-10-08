@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:saber/data/editor/ids.dart';
+import 'package:saber/data/note_library.dart';
 import 'package:saber/data/prefs.dart';
 
 /// Why the server refused a request, or couldn't be asked.
@@ -231,6 +232,9 @@ abstract final class RealtimeAccount {
   static void _forgetSyncState() {
     stows.realtimePendingDeletes.value = [];
     stows.realtimeNoteSeqs.value = '{}';
+    // everything is sent to the new account
+    stows.noteLibraryUnsent.value = NoteLibrary.allPaths;
+    NoteLibrary.forgetChangeTimes();
   }
 
   static Future<RemoteNotes> fetchNotes() async {
@@ -248,4 +252,19 @@ abstract final class RealtimeAccount {
   /// so that the user's other devices delete it too.
   static Future<void> deleteNote(String path) =>
       _authorizedRequest('POST', '/notes/delete', body: {'path': path});
+
+  /// Sends the [changes] to the favorites and covers made on this device,
+  /// and returns those of the whole account.
+  static Future<Map<String, dynamic>> syncLibrary(
+    Map<String, Map<String, dynamic>> changes,
+  ) async {
+    final json = changes.isEmpty
+        ? await _authorizedRequest('GET', '/library')
+        : await _authorizedRequest(
+            'POST',
+            '/library',
+            body: {'entries': changes},
+          );
+    return Map<String, dynamic>.from(json['entries'] as Map);
+  }
 }

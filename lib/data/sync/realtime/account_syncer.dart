@@ -7,6 +7,7 @@ import 'package:saber/components/canvas/_asset_cache.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
+import 'package:saber/data/note_library.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/data/sync/realtime/note_ops.dart';
 import 'package:saber/data/sync/realtime/realtime_account.dart';
@@ -188,6 +189,8 @@ class AccountSyncer {
         await _syncNote(path, exists: true);
       }
 
+      await _syncLibrary();
+
       state.value = .upToDate;
     } on RealtimeAccountException catch (e) {
       log.info('Failed to sync the library: $e');
@@ -196,6 +199,14 @@ class AccountSyncer {
       log.severe('Failed to sync the library: $e', e, st);
       state.value = .offline;
     }
+  }
+
+  /// Sends the favorites and covers that changed on this device,
+  /// and applies those that changed on the others.
+  static Future<void> _syncLibrary() async {
+    final unsent = NoteLibrary.unsentChanges;
+    final remote = await RealtimeAccount.syncLibrary(unsent);
+    NoteLibrary.applyRemoteChanges(remote, sent: unsent);
   }
 
   /// Tells the server about the notes that were deleted on this device.

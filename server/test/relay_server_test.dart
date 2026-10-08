@@ -574,6 +574,47 @@ void main() {
       ]);
     });
 
+    test('keeps the latest favorite and cover of each note', () async {
+      var (status, body) = await request(
+        'POST',
+        '/library',
+        token: token,
+        body: {
+          'entries': {
+            '/a': {'f': true, 'c': 2, 't': 10},
+            '/b': {'f': false, 'c': 1, 't': 10},
+          },
+        },
+      );
+      expect(status, 200);
+
+      // an older change from another device is ignored
+      (status, body) = await request(
+        'POST',
+        '/library',
+        token: token,
+        body: {
+          'entries': {
+            '/a': {'f': false, 'c': -1, 't': 5},
+            '/b': {'f': true, 'c': 1, 't': 20},
+          },
+        },
+      );
+      final entries = body['entries'] as Map;
+      expect(entries['/a'], {'f': true, 'c': 2, 't': 10});
+      expect(entries['/b'], {'f': true, 'c': 1, 't': 20});
+
+      await server.stop();
+      await startServer();
+      (status, body) = await request('GET', '/library', token: token);
+      expect(body['entries'], entries);
+
+      // other accounts don't see it
+      final bob = await register('bob');
+      (status, body) = await request('GET', '/library', token: bob);
+      expect(body['entries'], isEmpty);
+    });
+
     test('a deleted note is deleted for the other devices', () async {
       final a = await _TestClient.connect(server, token)
         ..join('/note', 'a');

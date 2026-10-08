@@ -20,9 +20,37 @@ void main() {
   setUp(() {
     stows.favoriteNotes.value = [];
     stows.noteCovers.value = '{}';
+    stows.noteLibraryChanges.value = '{}';
+    stows.noteLibraryUnsent.value = [];
   });
 
   group('NoteLibrary', () {
+    test('changes are synced with the latest one winning', () {
+      // set before syncing existed, so older than any synced change
+      stows.favoriteNotes.value = ['/old'];
+      NoteLibrary.setCover('/a', NoteLibrary.coverColors[3]);
+      final unsent = NoteLibrary.unsentChanges;
+      expect(unsent.keys, unorderedEquals(['/a', '/old']));
+      expect(unsent['/old'], {'f': true, 'c': -1, 't': 1});
+      expect(unsent['/a']!['c'], 3);
+
+      // the server has a newer change to /old and an older one to /a,
+      // and the user changed /a again meanwhile
+      NoteLibrary.setFavorite('/a', true);
+      NoteLibrary.applyRemoteChanges({
+        '/old': {'f': false, 'c': 5, 't': 2},
+        '/a': {'f': false, 'c': -1, 't': 0},
+        '/b': {'f': true, 'c': -1, 't': 3},
+      }, sent: unsent);
+      expect(NoteLibrary.isFavorite('/old'), isFalse);
+      expect(NoteLibrary.coverOf('/old'), NoteLibrary.coverColors[5]);
+      expect(NoteLibrary.isFavorite('/b'), isTrue);
+      expect(NoteLibrary.isFavorite('/a'), isTrue);
+      expect(NoteLibrary.coverOf('/a'), NoteLibrary.coverColors[3]);
+      // only the change made meanwhile is left to send
+      expect(NoteLibrary.unsentChanges.keys, ['/a']);
+    });
+
     test('favorites', () {
       expect(NoteLibrary.isFavorite('/a'), isFalse);
       NoteLibrary.setFavorite('/a.sbn2', true);
