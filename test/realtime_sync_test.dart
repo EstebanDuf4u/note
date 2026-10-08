@@ -603,6 +603,36 @@ void main() {
       expect(b.contents, a.contents);
     });
 
+    test('part of a stroke is erased', () {
+      final a = _Device('a'), b = _Device('b');
+      final stroke = a.draw(0);
+      b.receive(a.lastOps);
+
+      final page = a.pages[0];
+      final pieces = stroke.erasedAround(const Offset(10, 5), 0.5)!;
+      expect(pieces, isNotEmpty);
+      page.strokes
+        ..remove(stroke)
+        ..addAll(pieces);
+      final item = EditorHistoryItem(
+        type: .split,
+        pageIndex: 0,
+        strokes: [stroke],
+        images: [],
+        replacements: pieces,
+      );
+      b.receive(a.record(item));
+      expect(b.contents, a.contents);
+
+      // undoing brings the whole stroke back
+      page.strokes
+        ..removeWhere(pieces.contains)
+        ..add(stroke);
+      b.receive(a.record(item, inverse: true));
+      expect(b.contents, a.contents);
+      expect(b.pages[0].strokes.single.id, stroke.id);
+    });
+
     test('moving a page', () {
       final a = _Device('a'), b = _Device('b');
       a.draw(0);

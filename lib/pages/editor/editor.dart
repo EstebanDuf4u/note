@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show min;
+import 'dart:math' show max, min;
 
 import 'package:collapsible/collapsible.dart';
 import 'package:file_picker/file_picker.dart';
@@ -626,6 +626,18 @@ class EditorState extends State<Editor> {
 
         case .backgroundPattern:
           coreInfo.backgroundPattern = item.backgroundPatternChange!.previous;
+
+        case .split:
+          for (final stroke in item.replacements) {
+            for (final page in coreInfo.pages) {
+              if (page.strokes.remove(stroke)) break;
+            }
+          }
+          for (final stroke in item.strokes) {
+            createPage(stroke.pageIndex);
+            coreInfo.pages[stroke.pageIndex].insertStroke(stroke);
+          }
+          removeExcessPages();
       }
 
       if (item.type != .move) {
@@ -678,6 +690,10 @@ class EditorState extends State<Editor> {
           item.copyWith(
             backgroundPatternChange: item.backgroundPatternChange!.reverse(),
           ),
+        );
+      case .split:
+        undo(
+          item.copyWith(strokes: item.replacements, replacements: item.strokes),
         );
     }
   }
@@ -761,12 +777,7 @@ class EditorState extends State<Editor> {
         currentPressure,
       );
     } else if (currentTool is Eraser) {
-      for (final stroke in (currentTool as Eraser).checkForOverlappingStrokes(
-        position,
-        page.strokes,
-      )) {
-        page.strokes.remove(stroke);
-      }
+      (currentTool as Eraser).erase(position, page.strokes);
       removeExcessPages();
     } else if (currentTool is Select) {
       final select = currentTool as Select;
@@ -802,14 +813,20 @@ class EditorState extends State<Editor> {
       (currentTool as Pen).onDragUpdate(position, currentPressure);
       page.redrawStrokes();
     } else if (currentTool is Eraser) {
-      for (final stroke in (currentTool as Eraser).checkForOverlappingStrokes(
-        position,
-        page.strokes,
-      )) {
-        page.strokes.remove(stroke);
+      // the eraser may have skipped over part of the page since the last
+      // update, so erase along the way too
+      final eraser = currentTool as Eraser;
+      final distance = (position - previousPosition).distance;
+      final steps = (distance / max(eraser.size / 2, 1)).ceil().clamp(1, 50);
+      var changed = false;
+      for (int i = 1; i <= steps; ++i) {
+        final point = Offset.lerp(previousPosition, position, i / steps)!;
+        changed = eraser.erase(point, page.strokes) || changed;
       }
-      page.redrawStrokes();
-      removeExcessPages();
+      if (changed) {
+        page.redrawStrokes();
+        removeExcessPages();
+      }
     } else if (currentTool is Select) {
       final select = currentTool as Select;
       if (select.doneSelecting) {
@@ -858,7 +875,7 @@ class EditorState extends State<Editor> {
           ),
         );
       } else if (currentTool is Eraser) {
-        final erased = (currentTool as Eraser).onDragEnd();
+        final (:erased, :pieces) = (currentTool as Eraser).onDragEnd();
         if (stylusButtonWasPressed || stows.disableEraserAfterUse.value) {
           // restore previous tool
           stylusButtonWasPressed = false;
@@ -867,10 +884,11 @@ class EditorState extends State<Editor> {
         if (erased.isEmpty) return;
         history.recordChange(
           EditorHistoryItem(
-            type: .erase,
+            type: pieces.isEmpty ? .erase : .split,
             pageIndex: dragPageIndex!,
             strokes: erased,
             images: [],
+            replacements: pieces,
           ),
         );
       } else if (currentTool is Select) {

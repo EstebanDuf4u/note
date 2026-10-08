@@ -355,6 +355,9 @@ editor:
     pencil: Pencil
     shapePen: Shape pen
     laserPointer: Laser pointer
+  eraserOptions:
+    partial: Partial
+    wholeStroke: Whole stroke
   penOptions:
     size: Size
   colors:

@@ -258,6 +258,7 @@ class _Translations$editor$fr extends Translations$editor$en {
 	@override late final _Translations$editor$realtime$fr realtime = _Translations$editor$realtime$fr._(_root);
 	@override late final _Translations$editor$toolbar$fr toolbar = _Translations$editor$toolbar$fr._(_root);
 	@override late final _Translations$editor$pens$fr pens = _Translations$editor$pens$fr._(_root);
+	@override late final _Translations$editor$eraserOptions$fr eraserOptions = _Translations$editor$eraserOptions$fr._(_root);
 	@override late final _Translations$editor$penOptions$fr penOptions = _Translations$editor$penOptions$fr._(_root);
 	@override late final _Translations$editor$colors$fr colors = _Translations$editor$colors$fr._(_root);
 	@override late final _Translations$editor$imageOptions$fr imageOptions = _Translations$editor$imageOptions$fr._(_root);
@@ -819,6 +820,17 @@ class _Translations$editor$pens$fr extends Translations$editor$pens$en {
 	@override String get pencil => 'Crayon';
 	@override String get shapePen => 'Forme du stylo';
 	@override String get laserPointer => 'Pointeur laser';
+}
+
+// Path: editor.eraserOptions
+class _Translations$editor$eraserOptions$fr extends Translations$editor$eraserOptions$en {
+	_Translations$editor$eraserOptions$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get partial => 'Partielle';
+	@override String get wholeStroke => 'Trait entier';
 }
 
 // Path: editor.penOptions

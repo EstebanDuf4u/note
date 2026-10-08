@@ -153,6 +153,7 @@ class EditorHistoryItem {
     this.quillChange,
     this.colorChange,
     this.backgroundPatternChange,
+    this.replacements = const [],
   }) : assert(
          type != .move || offset != null,
          'Offset must be provided for move',
@@ -192,6 +193,10 @@ class EditorHistoryItem {
   final Map<Stroke, Change<Color>>? colorChange;
   final Change<CanvasBackgroundPattern>? backgroundPatternChange;
 
+  /// For [EditorHistoryItemType.split],
+  /// the strokes that took the place of [strokes].
+  final List<Stroke> replacements;
+
   EditorHistoryItem copyWith({
     EditorHistoryItemType? type,
     int? pageIndex,
@@ -202,6 +207,7 @@ class EditorHistoryItem {
     DocChange? quillChange,
     Map<Stroke, Change<Color>>? colorChange,
     Change<CanvasBackgroundPattern>? backgroundPatternChange,
+    List<Stroke>? replacements,
   }) {
     return EditorHistoryItem(
       type: type ?? this.type,
@@ -214,6 +220,7 @@ class EditorHistoryItem {
       colorChange: colorChange ?? this.colorChange,
       backgroundPatternChange:
           backgroundPatternChange ?? this.backgroundPatternChange,
+      replacements: replacements ?? this.replacements,
     );
   }
 }
@@ -228,4 +235,8 @@ enum EditorHistoryItemType {
   quillUndoneChange,
   changeColor,
   backgroundPattern,
+
+  /// Strokes were replaced by others, e.g. by pieces of them
+  /// when part of them was erased.
+  split,
 }

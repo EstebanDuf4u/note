@@ -393,6 +393,7 @@ class Translations$editor$en {
 	late final Translations$editor$realtime$en realtime = Translations$editor$realtime$en.internal(_root);
 	late final Translations$editor$toolbar$en toolbar = Translations$editor$toolbar$en.internal(_root);
 	late final Translations$editor$pens$en pens = Translations$editor$pens$en.internal(_root);
+	late final Translations$editor$eraserOptions$en eraserOptions = Translations$editor$eraserOptions$en.internal(_root);
 	late final Translations$editor$penOptions$en penOptions = Translations$editor$penOptions$en.internal(_root);
 	late final Translations$editor$colors$en colors = Translations$editor$colors$en.internal(_root);
 	late final Translations$editor$imageOptions$en imageOptions = Translations$editor$imageOptions$en.internal(_root);
@@ -1363,6 +1364,21 @@ class Translations$editor$pens$en {
 
 	/// en: 'Laser pointer'
 	String get laserPointer => 'Laser pointer';
+}
+
+// Path: editor.eraserOptions
+class Translations$editor$eraserOptions$en {
+	Translations$editor$eraserOptions$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Partial'
+	String get partial => 'Partial';
+
+	/// en: 'Whole stroke'
+	String get wholeStroke => 'Whole stroke';
 }
 
 // Path: editor.penOptions
