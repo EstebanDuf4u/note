@@ -1479,3 +1479,50 @@ button {
 [hidden] {
   display: none !important;
 }
+
+.swatches .paper-cover {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 5px, rgba(79, 70, 229, 0.3) 5px 6px),
+    #fff;
+}
+
+.page-thumb .thumb {
+  width: 100%;
+  display: block;
+}
+
+.thumb-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 28px;
+}
+
+.thumb-label .bookmark .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.thumb-more {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.thumb-more:active {
+  background: var(--surface-2);
+}
+
+.thumb-more .icon {
+  width: 18px;
+  height: 18px;
+}

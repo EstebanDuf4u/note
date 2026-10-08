@@ -8,6 +8,7 @@ import {
   imageAt,
   imagesInLasso,
   isStraightLine,
+  recognizeShape,
   straighten,
   strokesInLasso,
   tapeAt,
@@ -82,7 +83,20 @@ const PENS = {
     pressure: false,
     options: { t: 0, sm: 0.7, sl: 0.7 },
   },
+  shapePen: {
+    tool: Tools.shapePen,
+    icon: 'shapes',
+    name: 'Formes',
+    sizes: [3, 5, 9],
+    colors: COLORS,
+    pressure: false,
+    options: { t: 0, sm: 0, sl: 0 },
+  },
 };
+
+/** The pens that share the dock's first button. */
+const PEN_KINDS = ['fountainPen', 'ballpointPen', 'pencil'];
+const PEN_KIND_NAMES = { fountainPen: 'Plume', ballpointPen: 'Bille', pencil: 'Crayon' };
 
 const ERASER_SIZES = [6, 12, 24];
 
@@ -136,6 +150,7 @@ export class Editor {
     this.redoStack = [];
     this.pointers = new Map();
     this.presences = new Map();
+    this.lasers = [];
     this.loaded = false;
 
     this.tool = load('tool', 'fountainPen');
@@ -251,17 +266,16 @@ export class Editor {
   }
 
   renderDock() {
-    // the fountain pen and the ballpoint share a button, to fit on phones
-    const penTool = this.tool === 'ballpointPen' || this.tool === 'fountainPen'
-      ? this.tool
-      : load('lastPen', 'fountainPen');
+    // the pens share a button, to fit on phones
+    const penTool = PEN_KINDS.includes(this.tool) ? this.tool : load('lastPen', 'fountainPen');
     const tools = [
       [penTool, PENS[penTool].icon, PENS[penTool].name],
-      ['pencil', PENS.pencil.icon, 'Crayon'],
       ['highlighter', PENS.highlighter.icon, 'Surligneur'],
+      ['shapePen', 'shapes', 'Formes'],
       ['eraser', 'eraser', 'Gomme'],
       ['lasso', 'lasso', 'Lasso'],
       ['tape', 'tape', 'Ruban adhésif'],
+      ['laser', 'laser', 'Pointeur laser'],
     ];
     const pen = PENS[this.tool];
     const settings = pen ? this.settingsOf(this.tool) : null;
@@ -331,7 +345,7 @@ export class Editor {
     const pen = PENS[tool];
     const saved = this.penSettings[tool] ?? {};
     // the fountain pen and the ballpoint share their color
-    const colorKey = tool === 'ballpointPen' ? 'fountainPen' : tool;
+    const colorKey = PEN_KINDS.includes(tool) ? 'fountainPen' : tool;
     return {
       color: this.penSettings[colorKey]?.color ?? pen.colors[0],
       size: saved.size ?? pen.sizes[1],
@@ -341,7 +355,7 @@ export class Editor {
   setTool(tool) {
     this.tool = tool;
     save('tool', tool);
-    if (tool === 'fountainPen' || tool === 'ballpointPen') save('lastPen', tool);
+    if (PEN_KINDS.includes(tool)) save('lastPen', tool);
     if (tool !== 'lasso') this.clearSelection();
     this.closePopover();
     this.renderDock();
@@ -363,7 +377,7 @@ export class Editor {
       const settings = this.settingsOf(tool);
       const update = (change) => {
         this.penSettings[tool] = { ...settings, ...change };
-        if (tool === 'ballpointPen' && change.color !== undefined) {
+        if (PEN_KINDS.includes(tool) && change.color !== undefined) {
           this.penSettings.fountainPen = { ...this.penSettings.fountainPen, color: change.color };
         }
         save('pens', this.penSettings);
@@ -373,11 +387,11 @@ export class Editor {
       };
       content.push(
         h('div.label', {}, pen.name),
-        tool === 'fountainPen' || tool === 'ballpointPen'
+        PEN_KINDS.includes(tool)
           ? h(
               'div.choice',
               {},
-              ['fountainPen', 'ballpointPen'].map((kind) =>
+              PEN_KINDS.map((kind) =>
                 h(
                   'button' + (kind === tool ? '.selected' : ''),
                   {
@@ -386,7 +400,7 @@ export class Editor {
                       this.togglePopover();
                     },
                   },
-                  kind === 'fountainPen' ? 'Plume' : 'Bille',
+                  PEN_KIND_NAMES[kind],
                 ),
               ),
             )
@@ -878,6 +892,9 @@ export class Editor {
         this.drawSelection(ctx, z);
       }
       if (this.lasso?.page === page) this.drawLasso(ctx, z);
+      for (const laser of this.lasers) {
+        if (laser.page === page) this.drawLaser(ctx, laser, z);
+      }
       for (const [from, presence] of this.presences) {
         if (presence.pg === page.id) this.drawCursor(ctx, presence, colorOf(from), z);
       }
@@ -897,6 +914,12 @@ export class Editor {
         ctx.fill();
       }
     });
+
+    if (this.lasers.length) {
+      const now = performance.now();
+      this.lasers = this.lasers.filter((laser) => laser.ended === null || now - laser.ended < 1800);
+      if (this.lasers.some((laser) => laser.ended !== null)) this.requestFrame();
+    }
 
     // pictures of pages that went off screen are let go
     for (const page of this.caches.keys()) {
@@ -919,6 +942,30 @@ export class Editor {
     this.pagePill.innerHTML = icon('pages');
     this.pagePill.append(`${current} / ${Math.max(pageCount, current)}`);
     this.positionSelectionBar();
+  }
+
+  /** A laser's trail, which fades away a moment after it's drawn. */
+  drawLaser(ctx, laser, z) {
+    const age = laser.ended === null ? 0 : performance.now() - laser.ended;
+    const alpha = Math.max(0, Math.min(1, 1 - (age - 1200) / 600));
+    if (alpha <= 0 || laser.points.length < 1) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    laser.points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    if (laser.points.length === 1) ctx.lineTo(laser.points[0][0] + 0.1, laser.points[0][1]);
+    ctx.shadowColor = 'rgba(255, 40, 40, 0.9)';
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = 'rgba(255, 50, 50, 0.95)';
+    ctx.lineWidth = 7 / z;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 2.5 / z;
+    ctx.stroke();
+    ctx.restore();
   }
 
   drawSelection(ctx, z) {
@@ -988,7 +1035,11 @@ export class Editor {
 
   onPointerDown(e) {
     e.preventDefault();
-    this.canvas.setPointerCapture?.(e.pointerId);
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // the pointer is already gone
+    }
     this.closePopover();
     const point = { x: e.offsetX, y: e.offsetY, type: e.pointerType, start: performance.now(), sx: e.offsetX, sy: e.offsetY };
     this.pointers.set(e.pointerId, point);
@@ -1287,6 +1338,16 @@ export class Editor {
       return;
     }
 
+    if (this.tool === 'laser') {
+      // the laser's trail fades away and isn't saved, like in the app
+      const laser = { page: hit.page, points: [[hit.x, hit.y]], ended: null };
+      this.lasers.push(laser);
+      this.gesture = { kind: 'laser', pointerId: e.pointerId, byTouch, laser };
+      this.sendPresence(hit.page, hit.x, hit.y, true);
+      this.requestFrame();
+      return;
+    }
+
     const pen = PENS[this.tool];
     const settings = this.settingsOf(this.tool);
     const pressure = pen.pressure && e.pointerType === 'pen';
@@ -1355,6 +1416,12 @@ export class Editor {
         this.lasso.points.push([x, y]);
         break;
       }
+      case 'laser': {
+        const [x, y] = this.pointOn(gesture.laser.page, e);
+        gesture.laser.points.push([x, y]);
+        this.sendPresence(gesture.laser.page, x, y, true);
+        break;
+      }
       case 'move': {
         const [x, y] = this.pointOn(this.selection.page, e);
         const dx = x - gesture.last[0];
@@ -1420,6 +1487,16 @@ export class Editor {
         }
         stroke.options.f = true;
         if (stroke.tool === Tools.tape && isStraightLine(stroke)) straighten(stroke);
+        if (stroke.tool === Tools.shapePen) {
+          const shape = recognizeShape(stroke.points);
+          if (shape?.kind === 'line') {
+            straighten(stroke);
+          } else if (shape) {
+            // drawn again as the shape it looks like
+            const { kind, ...geometry } = shape;
+            Object.assign(stroke, { shape: kind, points: [], ...geometry });
+          }
+        }
         stroke.invalidate();
         page.insertStroke(stroke);
         this.note.ensureBlankLastPage();
@@ -1442,6 +1519,11 @@ export class Editor {
             [Ops.removeStrokes(pieces), ...erased.map((stroke) => Ops.addStroke(page, stroke))],
           );
         }
+        break;
+      }
+      case 'laser': {
+        gesture.laser.ended = performance.now();
+        this.sendPresence(gesture.laser.page, ...gesture.laser.points.at(-1), false);
         break;
       }
       case 'lasso': {
@@ -1884,11 +1966,24 @@ export class Editor {
             ctx.setTransform(scale * this.dpr, 0, 0, scale * this.dpr, 0, 0);
             drawPage(ctx, this.note, page, {});
             const bookmarked = page.bookmark !== null && page.bookmark !== undefined;
+            const isBlankLast = index === pages.length - 1 && page.isEmpty;
             return h(
-              'button.page-thumb' + (index === current ? '.current' : ''),
-              { onclick: () => close({ go: index }) },
-              thumb,
-              h('span', {}, bookmarked ? h('span.bookmark', {}, '▾ ') : null, String(index + 1)),
+              'div.page-thumb' + (index === current ? '.current' : ''),
+              {},
+              h('button.thumb', { onclick: () => close({ go: index }), 'aria-label': `Page ${index + 1}` }, thumb),
+              h(
+                'div.thumb-label',
+                {},
+                bookmarked ? h('span.bookmark', {}, icon('bookmark', { filled: true })) : null,
+                String(index + 1),
+                isBlankLast
+                  ? null
+                  : h(
+                      'button.thumb-more',
+                      { onclick: () => close({ menu: index }), 'aria-label': `Options de la page ${index + 1}` },
+                      icon('more'),
+                    ),
+              ),
             );
           }),
           h(
@@ -1902,6 +1997,99 @@ export class Editor {
     });
     if (choice?.go !== undefined) this.scrollToPage(choice.go);
     if (choice?.add) this.addPageAfter(Math.max(0, pages.length - 2));
+    if (choice?.menu !== undefined) this.showPageMenu(choice.menu);
+  }
+
+  /** What can be done with the page at `index`. */
+  async showPageMenu(index) {
+    const page = this.note.pages[index];
+    const last = this.note.pages.length - (this.note.pages.at(-1).isEmpty ? 2 : 1);
+    const bookmarked = page.bookmark !== null && page.bookmark !== undefined;
+    const choice = await sheet((close) => [
+      h('h2', {}, `Page ${index + 1}`),
+      h(
+        'div.menu',
+        {},
+        h('button', { onclick: () => close('go') }, icon('pages'), 'Afficher'),
+        h('button', { onclick: () => close('add') }, icon('plus'), 'Ajouter une page après'),
+        bookmarked
+          ? [
+              h('button', { onclick: () => close('rename') }, icon('bookmark', { filled: true }), 'Renommer le signet'),
+              h('button', { onclick: () => close('bookmark') }, icon('bookmark'), 'Retirer le signet'),
+            ]
+          : h('button', { onclick: () => close('bookmark') }, icon('bookmark'), 'Ajouter un signet'),
+        index > 0 ? h('button', { onclick: () => close('up') }, icon('back'), 'Déplacer avant') : null,
+        index < last ? h('button', { onclick: () => close('down') }, icon('back', { flip: true }), 'Déplacer après') : null,
+        h('button.danger', { onclick: () => close('delete') }, icon('trash'), 'Supprimer la page'),
+      ),
+    ]);
+    if (choice === 'go') this.scrollToPage(index);
+    if (choice === 'add') this.addPageAfter(index);
+    if (choice === 'bookmark') this.toggleBookmark(index);
+    if (choice === 'rename') this.renameBookmark(index);
+    if (choice === 'up') this.movePage(index, index - 1);
+    if (choice === 'down') this.movePage(index, index + 1);
+    if (choice === 'delete') this.deletePage(index);
+  }
+
+  async renameBookmark(index) {
+    const page = this.note.pages[index];
+    const title = await prompt({
+      title: 'Renommer le signet',
+      value: page.bookmark ?? '',
+      placeholder: `Page ${index + 1}`,
+      action: 'Renommer',
+    });
+    if (title === undefined) return;
+    const before = Ops.bookmark(page);
+    page.bookmark = title;
+    page.changed();
+    this.commit([Ops.bookmark(page)], [before]);
+    this.requestFrame();
+  }
+
+  /** Moves the page at `from` so that it ends up at `to`. */
+  movePage(from, to) {
+    const pages = this.note.pages;
+    const page = pages[from];
+    const afterBefore = from > 0 ? pages[from - 1].id : null;
+    const without = pages.filter((p) => p !== page);
+    const afterNow = to > 0 ? without[to - 1].id : null;
+    const op = Ops.movePage(page, afterNow);
+    this.note.apply(clone(op));
+    this.commit([op], [Ops.movePage(page, afterBefore)]);
+    this.invalidateAll();
+    this.scrollToPage(this.note.pages.indexOf(page));
+    toast(`Page déplacée en position ${this.note.pages.indexOf(page) + 1}`);
+  }
+
+  async deletePage(index) {
+    const page = this.note.pages[index];
+    if (!page.isEmpty) {
+      const ok = await confirm({
+        title: `Supprimer la page ${index + 1} ?`,
+        message: 'Tout ce qui est écrit dessus sera supprimé, pour tous ceux qui ont ce carnet.',
+        action: 'Supprimer',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    const after = index > 0 ? this.note.pages[index - 1].id : null;
+    // undoing puts the page back with what was on it
+    const inverse = [
+      Ops.insertPage(page, after),
+      ...page.strokes.map((stroke) => Ops.addStroke(page, stroke)),
+      ...page.images.flatMap((image) => Ops.addImage(page, image, { sendAsset: false })),
+      ...(page.bookmark !== null && page.bookmark !== undefined ? [Ops.bookmark(page)] : []),
+    ];
+    const op = Ops.deletePage(page);
+    this.note.apply(clone(op));
+    this.commit([op], inverse);
+    this.clearSelection();
+    this.invalidateAll();
+    this.clampCamera();
+    this.requestFrame();
+    toast('Page supprimée');
   }
 
   close() {

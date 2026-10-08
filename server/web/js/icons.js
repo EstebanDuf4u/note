@@ -43,6 +43,10 @@ const paths = {
     '<path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M16 2v20"/>',
   cloudOff:
     '<path d="M2 2l20 20"/><path d="M5.8 5.8A7 7 0 0 0 4 13.6 4.5 4.5 0 0 0 6.5 22h11a4.5 4.5 0 0 0 1.4-.2"/><path d="M21.5 17.5A4.5 4.5 0 0 0 17.5 11h-1.8A7 7 0 0 0 9 5.2"/>',
+  shapes:
+    '<path d="M8.3 10a.7.7 0 0 1-.6-1L11.4 3a.7.7 0 0 1 1.2 0L16.3 9a.7.7 0 0 1-.6 1z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/>',
+  laser:
+    '<path d="M12 3v3"/><path d="M18.4 5.6l-2.1 2.1"/><path d="M21 12h-3"/><path d="M5.6 5.6l2.1 2.1"/><path d="M3 12h3"/><circle cx="12" cy="12" r="2.5"/><path d="M13.8 13.8L20 20"/>',
   photo:
     '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
   cards:
@@ -52,7 +56,8 @@ const paths = {
 };
 
 /** Returns the svg markup of the icon `name`. */
-export function icon(name, { filled = false } = {}) {
-  const fill = filled ? ' style="fill: currentColor"' : '';
+export function icon(name, { filled = false, flip = false } = {}) {
+  const styles = [filled ? 'fill: currentColor' : '', flip ? 'transform: scaleX(-1)' : ''].filter(Boolean);
+  const fill = styles.length ? ` style="${styles.join('; ')}"` : '';
   return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"${fill}>${paths[name] ?? ''}</svg>`;
 }
