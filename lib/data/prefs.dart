@@ -411,6 +411,22 @@ class Stows {
   /// to the index of the cover's color. See [NoteLibrary].
   final noteCovers = PlainStow('noteCovers', '{}', volatile: !_isOnMainIsolate);
 
+  /// A json map from the path of each note whose favorite or cover changed
+  /// to when it last changed, and what to, so that the account's devices
+  /// keep the latest change. See [NoteLibrary].
+  final noteLibraryChanges = PlainStow(
+    'noteLibraryChanges',
+    '{}',
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// The notes whose entry in [noteLibraryChanges] the server hasn't got yet.
+  final noteLibraryUnsent = PlainStow(
+    'noteLibraryUnsent',
+    <String>[],
+    volatile: !_isOnMainIsolate,
+  );
+
   /// File paths that have been deleted locally
   final fileSyncAlreadyDeleted = PlainStow(
     'fileSyncAlreadyDeleted',

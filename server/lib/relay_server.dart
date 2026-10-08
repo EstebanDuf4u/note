@@ -159,6 +159,18 @@ class RelayServer {
         await notes.delete(_string(body, 'path'));
         return {};
 
+      case ('GET', '/library'):
+        final notes = await _notesOf(_authenticate(request));
+        return {'entries': notes.library};
+
+      case ('POST', '/library'):
+        final notes = await _notesOf(_authenticate(request));
+        final entries = (await _readBody(request))['entries'];
+        if (entries is! Map<String, dynamic>) {
+          throw const AccountException('bad_request', HttpStatus.badRequest);
+        }
+        return {'entries': await notes.mergeLibrary(entries)};
+
       default:
         throw const AccountException('not_found', HttpStatus.notFound);
     }
@@ -329,6 +341,36 @@ class _UserNotes {
 
   File get _indexFile => File('${directory.path}/notes.json');
 
+  /// Whether each note is a favorite and which cover it has, by its path,
+  /// along with when that last changed on the device that changed it.
+  /// The app gives these meaning; the server keeps the latest of each.
+  final library = <String, Map<String, dynamic>>{};
+
+  File get _libraryFile => File('${directory.path}/library.json');
+
+  /// Keeps those of [entries] that are newer than what we have,
+  /// and returns the whole library.
+  Future<Map<String, Map<String, dynamic>>> mergeLibrary(
+    Map<String, dynamic> entries,
+  ) => _synchronized(() async {
+    var changed = false;
+    for (final MapEntry(key: path, value: entry) in entries.entries) {
+      if (entry is! Map<String, dynamic>) continue;
+      final time = entry['t'];
+      if (time is! num) continue;
+      final current = library[path]?['t'] as num?;
+      if (current != null && current >= time) continue;
+      library[path] = entry;
+      changed = true;
+    }
+    if (changed) {
+      final temporary = File('${_libraryFile.path}.tmp');
+      await temporary.writeAsString(jsonEncode(library), flush: true);
+      await temporary.rename(_libraryFile.path);
+    }
+    return library;
+  });
+
   static Future<_UserNotes> open(
     Directory directory, {
     required Duration roomIdleTimeout,
@@ -341,6 +383,12 @@ class _UserNotes {
       ) as Map<String, dynamic>;
       notes._written.addAll((json['notes'] as List).cast());
       notes._deleted.addAll((json['deleted'] as List).cast());
+    }
+    if (notes._libraryFile.existsSync()) {
+      final json = jsonDecode(await notes._libraryFile.readAsString()) as Map;
+      for (final MapEntry(:key, :value) in json.entries) {
+        notes.library[key as String] = Map<String, dynamic>.from(value as Map);
+      }
     }
     return notes;
   }

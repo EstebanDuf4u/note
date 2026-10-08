@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:saber/data/prefs.dart';
@@ -47,6 +48,7 @@ abstract final class NoteLibrary {
       favorites.remove(path);
     }
     stows.favoriteNotes.value = favorites;
+    _recordChange(path);
   }
 
   static Map<String, int> get _covers {
@@ -78,6 +80,7 @@ abstract final class NoteLibrary {
       covers[path] = index;
     }
     stows.noteCovers.value = jsonEncode(covers);
+    _recordChange(path);
   }
 
   /// Call this when a note has been moved or renamed.
@@ -101,11 +104,128 @@ abstract final class NoteLibrary {
       covers[toPath] = cover;
       stows.noteCovers.value = jsonEncode(covers);
     }
+
+    _recordChange(fromPath);
+    _recordChange(toPath);
   }
 
   /// Call this when a note has been deleted.
   static void noteRemoved(String path) {
     setFavorite(path, false);
     setCover(path, null);
+  }
+
+  static Map<String, Map<String, dynamic>> get _changes {
+    try {
+      return (jsonDecode(stows.noteLibraryChanges.value) as Map).map(
+        (path, entry) => MapEntry(
+          path as String,
+          Map<String, dynamic>.from(entry as Map),
+        ),
+      );
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /// The favorite and cover of the note at [path] as they're synced.
+  static Map<String, dynamic> _entryOf(String path, {required int time}) => {
+    'f': stows.favoriteNotes.value.contains(path),
+    'c': _covers[path] ?? -1,
+    't': time,
+  };
+
+  /// Takes note that the favorite or cover of [path] changed on this device,
+  /// so that the change is sent to the account's other devices.
+  static void _recordChange(String path) {
+    final changes = _changes;
+    final previous = changes[path]?['t'] as int? ?? 0;
+    // later than any change we know of, even if the clock went back
+    final time = max(DateTime.now().millisecondsSinceEpoch, previous + 1);
+    changes[path] = _entryOf(path, time: time);
+    stows.noteLibraryChanges.value = jsonEncode(changes);
+    final unsent = stows.noteLibraryUnsent.value;
+    if (!unsent.contains(path)) {
+      stows.noteLibraryUnsent.value = [...unsent, path];
+    }
+  }
+
+  /// Forgets when each favorite and cover changed, e.g. when switching to
+  /// another account, so that they're sent to it as older than its own.
+  static void forgetChangeTimes() => stows.noteLibraryChanges.value = '{}';
+
+  /// The notes that are favorites or have a cover.
+  static List<String> get allPaths => {
+    ...stows.favoriteNotes.value,
+    ..._covers.keys,
+  }.toList();
+
+  /// Records the favorites and covers that were set before they were synced,
+  /// as older than any change made since, so that they're sent once.
+  static void _recordUntrackedEntries() {
+    final changes = _changes;
+    final untracked = [
+      for (final path in allPaths)
+        if (!changes.containsKey(path)) path,
+    ];
+    if (untracked.isEmpty) return;
+    for (final path in untracked) {
+      changes[path] = _entryOf(path, time: 1);
+    }
+    stows.noteLibraryChanges.value = jsonEncode(changes);
+    stows.noteLibraryUnsent.value = {
+      ...stows.noteLibraryUnsent.value,
+      ...untracked,
+    }.toList();
+  }
+
+  /// The changes that the server hasn't got yet, to send it.
+  static Map<String, Map<String, dynamic>> get unsentChanges {
+    _recordUntrackedEntries();
+    final changes = _changes;
+    return {
+      for (final path in stows.noteLibraryUnsent.value)
+        path: ?changes[path],
+    };
+  }
+
+  /// Applies the changes that the server has, which include those that
+  /// other devices made, and takes note that the [sent] ones arrived.
+  static void applyRemoteChanges(
+    Map<String, dynamic> remote, {
+    required Map<String, Map<String, dynamic>> sent,
+  }) {
+    final changes = _changes;
+    // a change made while the others were on their way is sent next time
+    stows.noteLibraryUnsent.value = [
+      for (final path in stows.noteLibraryUnsent.value)
+        if (sent[path]?['t'] != changes[path]?['t']) path,
+    ];
+
+    final favorites = stows.favoriteNotes.value.toList();
+    final covers = _covers;
+    var changed = false;
+    for (final MapEntry(key: path, value: entry) in remote.entries) {
+      if (entry is! Map) continue;
+      final time = (entry['t'] as num?)?.toInt() ?? 0;
+      if (time <= ((changes[path]?['t'] as num?)?.toInt() ?? 0)) continue;
+      changed = true;
+      changes[path] = Map<String, dynamic>.from(entry);
+
+      final favorite = entry['f'] == true;
+      if (favorite != favorites.contains(path)) {
+        favorite ? favorites.insert(0, path) : favorites.remove(path);
+      }
+      final cover = (entry['c'] as num?)?.toInt() ?? -1;
+      if (cover < 0 || cover >= coverColors.length) {
+        covers.remove(path);
+      } else {
+        covers[path] = cover;
+      }
+    }
+    if (!changed) return;
+    stows.noteLibraryChanges.value = jsonEncode(changes);
+    stows.favoriteNotes.value = favorites;
+    stows.noteCovers.value = jsonEncode(covers);
   }
 }
