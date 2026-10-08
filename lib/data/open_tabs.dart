@@ -22,7 +22,9 @@ abstract final class OpenTabs {
     lastShown = path;
     final tabs = paths.toList();
     if (tabs.contains(path)) return;
-    final index = after == null ? -1 : tabs.indexOf(NoteLibrary.notePath(after));
+    final index = after == null
+        ? -1
+        : tabs.indexOf(NoteLibrary.notePath(after));
     tabs.insert(index < 0 ? tabs.length : index + 1, path);
     while (tabs.length > maxTabs) {
       tabs.removeAt(tabs.first == path ? 1 : 0);

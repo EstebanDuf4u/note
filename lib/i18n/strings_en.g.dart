@@ -1356,6 +1356,9 @@ class Translations$editor$pens$en {
 
 	// Translations
 
+	/// en: 'Tape'
+	String get tape => 'Tape';
+
 	/// en: 'Fountain pen'
 	String get fountainPen => 'Fountain pen';
 

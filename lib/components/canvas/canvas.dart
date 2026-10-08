@@ -63,6 +63,8 @@ class Canvas extends StatelessWidget {
         return OnyxStrokeStyle.pen;
       case ToolId.laserPointer:
         return OnyxStrokeStyle.pen;
+      case ToolId.tape:
+        return OnyxStrokeStyle.marker;
       default:
         return OnyxStrokeStyle.disabled;
     }

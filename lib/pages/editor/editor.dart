@@ -56,6 +56,7 @@ import 'package:saber/data/tools/pen.dart';
 import 'package:saber/data/tools/pencil.dart';
 import 'package:saber/data/tools/select.dart';
 import 'package:saber/data/tools/shape_pen.dart';
+import 'package:saber/data/tools/tape.dart';
 import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/study.dart';
 import 'package:saber/pages/home/whiteboard.dart';
@@ -161,6 +162,8 @@ class EditorState extends State<Editor> {
         return Tool.textEditing;
       case .laserPointer:
         return LaserPointer.currentLaserPointer;
+      case .tape:
+        return Tape.currentTape;
     }
   }();
   Tool get currentTool => _currentTool;
@@ -430,8 +433,7 @@ class EditorState extends State<Editor> {
   void _toggleHorizontalPaging() {
     final pageIndex = currentPageIndex;
     setState(() {
-      stows.editorHorizontalPaging.value =
-          !stows.editorHorizontalPaging.value;
+      stows.editorHorizontalPaging.value = !stows.editorHorizontalPaging.value;
     });
     CanvasGestureDetector.scrollToPage(
       pageIndex: pageIndex,
@@ -955,6 +957,20 @@ class EditorState extends State<Editor> {
         final newStroke = (currentTool as Pen).onDragEnd();
         if (newStroke == null) return;
         if (newStroke.isEmpty) return;
+
+        // tapping tape shows or hides what's under it
+        if (newStroke.isTap) {
+          final tape = Tape.tapeAt(newStroke.firstPoint!, page.strokes);
+          if (tape != null) {
+            tape.revealed = !tape.revealed;
+            page.redrawStrokes();
+            shouldSave = false;
+            return;
+          }
+        }
+        if (newStroke.toolId == .tape && newStroke.isStraightLine()) {
+          newStroke.convertToLine();
+        }
 
         if (stows.autoStraightenLines.value &&
             currentTool is! ShapePen &&
@@ -1783,7 +1799,9 @@ class EditorState extends State<Editor> {
 
             currentTool = tool;
 
-            if (tool is Highlighter) {
+            if (tool is Tape) {
+              // there's only one tape
+            } else if (tool is Highlighter) {
               Highlighter.currentHighlighter = tool;
             } else if (tool is Pencil) {
               Pencil.currentPencil = tool;

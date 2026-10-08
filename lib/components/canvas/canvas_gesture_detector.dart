@@ -412,7 +412,28 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     if (diffFrom1 < 0.05 && diffFrom1 > 0.001)
       _snapZoomTimer = Timer(const Duration(milliseconds: 200), resetZoom);
 
-    if (scale < 1) {
+    if (CanvasGestureDetector.horizontalPaging) {
+      // the pages are side by side: don't scroll past the first or last page,
+      // and keep them centered when they're smaller than the screen
+      final width = containerBounds.maxWidth,
+          height = containerBounds.maxHeight;
+      final pageCount = max(1, widget.pages.length);
+      final double minX, maxX, minY, maxY;
+      if (scale < 1) {
+        maxX = (width - width * scale) / 2;
+        minX = maxX - (pageCount - 1) * width * scale;
+        minY = maxY = (height - height * scale) / 2;
+      } else {
+        maxX = 0;
+        minX = width - pageCount * width * scale;
+        maxY = 0;
+        minY = height - height * scale;
+      }
+      adjustmentX = translation.x.clamp(minX, maxX) - translation.x;
+      if (height.isFinite) {
+        adjustmentY = translation.y.clamp(minY, maxY) - translation.y;
+      }
+    } else if (scale < 1) {
       // horizontally center pages if zoomed out
       final center = containerBounds.maxWidth * (1 - scale) / 2;
       adjustmentX = center - translation.x;
@@ -558,7 +579,13 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
                   // past the size of the page (for minScale < 1)
                   boundaryMargin: .symmetric(
                     vertical: 0,
-                    horizontal: screenSize.width * 2,
+                    // when the pages are side by side, the viewer only knows
+                    // about the first one, so the others are in the margin
+                    horizontal:
+                        screenSize.width *
+                        (CanvasGestureDetector.horizontalPaging
+                            ? widget.pages.length + 1
+                            : 2),
                   ),
 
                   transformationController: widget._transformationController,
@@ -691,7 +718,9 @@ class _PagesBuilder extends StatelessWidget {
 
   /// Lays out the pages side by side, each one fitted to the screen.
   Widget _buildHorizontal(BuildContext context) {
-    return Row(
+    // The viewer gives us the width of the screen, so the row of pages
+    // overflows it to the right.
+    final row = Row(
       crossAxisAlignment: .start,
       children: [
         for (int pageIndex = 0; pageIndex < pages.length; pageIndex++)
@@ -715,6 +744,15 @@ class _PagesBuilder extends StatelessWidget {
             );
           }(),
       ],
+    );
+    return SizedBox(
+      width: containerWidth,
+      height: containerHeight,
+      child: OverflowBox(
+        alignment: .topLeft,
+        maxWidth: double.infinity,
+        child: row,
+      ),
     );
   }
 

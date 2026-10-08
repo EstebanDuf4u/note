@@ -28,6 +28,7 @@ import 'package:saber/data/tools/laser_pointer.dart';
 import 'package:saber/data/tools/pen.dart';
 import 'package:saber/data/tools/pencil.dart';
 import 'package:saber/data/tools/select.dart';
+import 'package:saber/data/tools/tape.dart';
 import 'package:saber/i18n/strings.g.dart';
 
 class Toolbar extends StatefulWidget {
@@ -245,6 +246,10 @@ class _ToolbarState extends State<Toolbar> {
                 setTool: widget.setTool,
               ),
               .eraser => const EraserOptions(),
+              .tape => PenModal(
+                getTool: () => Tape.currentTape,
+                setTool: widget.setTool,
+              ),
               .select => SelectionBar(
                 duplicateSelection: widget.duplicateSelection,
                 deleteSelection: widget.deleteSelection,
@@ -385,6 +390,23 @@ class _ToolbarState extends State<Toolbar> {
                 },
                 padding: buttonPadding,
                 child: const FaIcon(Highlighter.highlighterIcon, size: 16),
+              ),
+              ToolbarIconButton(
+                tooltip: t.editor.pens.tape,
+                selected: widget.currentTool == Tape.currentTape,
+                enabled: !widget.readOnly,
+                onPressed: () {
+                  if (widget.currentTool == Tape.currentTape) {
+                    toolOptionsType.value = toolOptionsType.value == .tape
+                        ? .hide
+                        : .tape;
+                  } else {
+                    toolOptionsType.value = .hide;
+                    widget.setTool(Tape.currentTape);
+                  }
+                },
+                padding: buttonPadding,
+                child: const FaIcon(Tape.tapeIcon, size: 16),
               ),
               ValueListenableBuilder(
                 valueListenable: showColorOptions,
@@ -591,4 +613,4 @@ class _ToolbarState extends State<Toolbar> {
   }
 }
 
-enum ToolOptions { hide, pen, highlighter, pencil, select, eraser }
+enum ToolOptions { hide, pen, highlighter, pencil, select, eraser, tape }

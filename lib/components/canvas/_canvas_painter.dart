@@ -138,6 +138,11 @@ class CanvasPainter extends CustomPainter {
         ..style = .stroke
         ..strokeWidth = stroke.options.size;
 
+      if (stroke.toolId == .tape) {
+        _drawTape(canvas, stroke, paint.color);
+        continue;
+      }
+
       if (stroke is CircleStroke) {
         canvas.drawCircle(stroke.center, stroke.radius, shapePaint);
       } else if (stroke is RectangleStroke) {
@@ -150,6 +155,45 @@ class CanvasPainter extends CustomPainter {
         canvas.drawPath(_selectPath(stroke), paint);
       }
     }
+  }
+
+  /// Draws [tape] as opaque striped tape, or as a faint outline of where it
+  /// is once it has been tapped to show what's under it.
+  void _drawTape(Canvas canvas, Stroke tape, Color color) {
+    final path = _selectPath(tape);
+    if (tape.revealed) {
+      canvas
+        ..drawPath(path, Paint()..color = color.withValues(alpha: 0.12))
+        ..drawPath(
+          dashPath(
+            // just the outline, without the overlaps inside the polygon
+            Path.combine(.union, path, Path()),
+            dashArray: CircularIntervalList([6, 4]),
+          ),
+          Paint()
+            ..color = color.withValues(alpha: 0.7)
+            ..style = .stroke
+            ..strokeWidth = 1.5,
+        );
+      return;
+    }
+
+    canvas.drawPath(path, Paint()..color = color.withValues(alpha: 1));
+    final bounds = path.getBounds();
+    final stripe = Paint()
+      ..color = Colors.white.withValues(alpha: 0.18)
+      ..strokeWidth = 4;
+    canvas
+      ..save()
+      ..clipPath(path);
+    for (var x = bounds.left - bounds.height; x < bounds.right; x += 12) {
+      canvas.drawLine(
+        Offset(x, bounds.bottom),
+        Offset(x + bounds.height, bounds.top),
+        stripe,
+      );
+    }
+    canvas.restore();
   }
 
   void _drawCurrentStroke(Canvas canvas) {

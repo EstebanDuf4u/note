@@ -352,6 +352,7 @@ editor:
     exportAs: "Exporter comme :"
     fullscreen: Basculer en plein ecran (F11)
   pens:
+    tape: Ruban adhésif
     fountainPen: Stylo encre
     ballpointPen: Stylo bille
     highlighter: Surligneur
