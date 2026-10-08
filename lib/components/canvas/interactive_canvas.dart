@@ -1036,14 +1036,8 @@ class _InteractiveCanvasViewerState extends State<InteractiveCanvasViewer>
 
   // Handle inertia drag animation.
   void _handleInertiaAnimation() {
-    if (!_controller.isAnimating) {
-      _currentAxis = null;
-      _animation?.removeListener(_handleInertiaAnimation);
-      _animation = null;
-      _controller.reset();
-      return;
-    }
-    // Translate such that the resulting translation is _animation.value.
+    // Translate such that the resulting translation is _animation.value,
+    // including on the last tick, so that the view ends up exactly there.
     final Vector3 translationVector = _transformer.value.getTranslation();
     final Offset translation = Offset(translationVector.x, translationVector.y);
     _transformer.value = _matrixTranslate(
@@ -1051,6 +1045,13 @@ class _InteractiveCanvasViewerState extends State<InteractiveCanvasViewer>
       _transformer.toScene(_animation!.value) -
           _transformer.toScene(translation),
     );
+
+    if (!_controller.isAnimating) {
+      _currentAxis = null;
+      _animation?.removeListener(_handleInertiaAnimation);
+      _animation = null;
+      _controller.reset();
+    }
   }
 
   // Handle inertia scale animation.

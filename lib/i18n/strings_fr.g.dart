@@ -817,6 +817,7 @@ class _Translations$editor$pens$fr extends Translations$editor$pens$en {
 	final TranslationsFr _root; // ignore: unused_field
 
 	// Translations
+	@override String get tape => 'Ruban adhésif';
 	@override String get fountainPen => 'Stylo encre';
 	@override String get ballpointPen => 'Stylo bille';
 	@override String get highlighter => 'Surligneur';

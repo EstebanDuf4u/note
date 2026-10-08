@@ -14,7 +14,11 @@ enum ToolId(final String id) {
   eraser('Eraser'),
   select('Select'),
   textEditing('TextEditingTool'),
-  laserPointer('LaserPointer');
+  laserPointer('LaserPointer'),
+
+  /// Covers part of a page until it's tapped, to quiz oneself.
+  /// Its id sorts after the pens' so that it's drawn above them.
+  tape('tape');
 
   static const codec = EnumCodec(values);
 

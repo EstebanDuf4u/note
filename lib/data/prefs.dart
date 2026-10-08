@@ -412,7 +412,11 @@ class Stows {
   final noteCovers = PlainStow('noteCovers', '{}', volatile: !_isOnMainIsolate);
 
   /// The notes that are open as tabs in the editor. See [OpenTabs].
-  final openTabs = PlainStow('openTabs', <String>[], volatile: !_isOnMainIsolate);
+  final openTabs = PlainStow(
+    'openTabs',
+    <String>[],
+    volatile: !_isOnMainIsolate,
+  );
 
   /// Whether the editor shows one page at a time, side by side,
   /// rather than one below the other.

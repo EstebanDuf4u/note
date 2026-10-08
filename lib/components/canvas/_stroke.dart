@@ -29,6 +29,15 @@ class Stroke {
 
   int pageIndex;
   HasSize page;
+
+  /// Whether this is tape that the user tapped to see what's under it.
+  /// Tape is hidden again when the note is reopened, so this isn't saved.
+  var revealed = false;
+
+  /// Whether this stroke is so small that the pen was only tapped.
+  bool get isTap => points.isNotEmpty && _boundsOf(points).longestSide < 4;
+
+  Offset? get firstPoint => points.firstOrNull;
   final ToolId toolId;
 
   static const defaultColor = Colors.black;
@@ -452,8 +461,7 @@ class Stroke {
 
     // a dot, or a stroke too small to be cut
     final isTiny =
-        points.length < 2 ||
-        _boundsOf(points).longestSide < options.size;
+        points.length < 2 || _boundsOf(points).longestSide < options.size;
     if (this is CircleStroke || this is RectangleStroke || isTiny) {
       final touched =
           lowQualityPath.contains(center) ||

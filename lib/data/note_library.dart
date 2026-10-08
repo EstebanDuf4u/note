@@ -118,10 +118,8 @@ abstract final class NoteLibrary {
   static Map<String, Map<String, dynamic>> get _changes {
     try {
       return (jsonDecode(stows.noteLibraryChanges.value) as Map).map(
-        (path, entry) => MapEntry(
-          path as String,
-          Map<String, dynamic>.from(entry as Map),
-        ),
+        (path, entry) =>
+            MapEntry(path as String, Map<String, dynamic>.from(entry as Map)),
       );
     } catch (e) {
       return {};
@@ -155,10 +153,8 @@ abstract final class NoteLibrary {
   static void forgetChangeTimes() => stows.noteLibraryChanges.value = '{}';
 
   /// The notes that are favorites or have a cover.
-  static List<String> get allPaths => {
-    ...stows.favoriteNotes.value,
-    ..._covers.keys,
-  }.toList();
+  static List<String> get allPaths =>
+      {...stows.favoriteNotes.value, ..._covers.keys}.toList();
 
   /// Records the favorites and covers that were set before they were synced,
   /// as older than any change made since, so that they're sent once.
@@ -184,8 +180,7 @@ abstract final class NoteLibrary {
     _recordUntrackedEntries();
     final changes = _changes;
     return {
-      for (final path in stows.noteLibraryUnsent.value)
-        path: ?changes[path],
+      for (final path in stows.noteLibraryUnsent.value) path: ?changes[path],
     };
   }
 

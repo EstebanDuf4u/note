@@ -42,8 +42,14 @@ class EditorTabBar extends StatelessWidget implements PreferredSizeWidget {
     return ValueListenableBuilder(
       valueListenable: stows.openTabs,
       builder: (context, tabs, _) {
-        return SizedBox(
+        return Container(
           height: height,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            border: Border(
+              bottom: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
+            ),
+          ),
           child: ReorderableListView.builder(
             scrollDirection: Axis.horizontal,
             buildDefaultDragHandles: false,
@@ -97,14 +103,11 @@ class _Tab extends StatelessWidget {
     return Padding(
       padding: const .only(right: 4, top: 6),
       child: Material(
-        color: selected
-            ? colorScheme.surface
-            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        shape: RoundedRectangleBorder(
-          borderRadius: const .vertical(top: .circular(10)),
-          side: selected
-              ? BorderSide(color: colorScheme.outlineVariant)
-              : BorderSide.none,
+        color: selected ? colorScheme.surface : Colors.transparent,
+        elevation: selected ? 1 : 0,
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.3),
+        shape: const RoundedRectangleBorder(
+          borderRadius: .vertical(top: .circular(10)),
         ),
         clipBehavior: .antiAlias,
         child: InkWell(

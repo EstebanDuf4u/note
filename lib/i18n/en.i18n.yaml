@@ -352,6 +352,7 @@ editor:
     exportAs: "Export as:"
     fullscreen: Toggle fullscreen (F11)
   pens:
+    tape: Tape
     fountainPen: Fountain pen
     ballpointPen: Ballpoint pen
     highlighter: Highlighter
