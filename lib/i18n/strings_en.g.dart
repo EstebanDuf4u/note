@@ -109,6 +109,26 @@ class Translations$home$en {
 	late final Translations$home$deleteFolder$en deleteFolder = Translations$home$deleteFolder$en.internal(_root);
 	late final Translations$home$sort$en sort = Translations$home$sort$en.internal(_root);
 	late final Translations$home$layout$en layout = Translations$home$layout$en.internal(_root);
+
+	/// en: 'Favorites'
+	String get favorites => 'Favorites';
+
+	/// en: 'Recent'
+	String get recent => 'Recent';
+
+	/// en: 'Search your notes'
+	String get search => 'Search your notes';
+
+	/// en: 'No notes match your search'
+	String get noSearchResults => 'No notes match your search';
+
+	/// en: 'Add to favorites'
+	String get addToFavorites => 'Add to favorites';
+
+	/// en: 'Remove from favorites'
+	String get removeFromFavorites => 'Remove from favorites';
+
+	late final Translations$home$cover$en cover = Translations$home$cover$en.internal(_root);
 }
 
 // Path: sentry
@@ -240,8 +260,8 @@ class Translations$account$en {
 	/// en: 'Sign in on each of your devices, and your notes will be kept in sync between them as you write.'
 	String get intro => 'Sign in on each of your devices, and your notes will be kept in sync between them as you write.';
 
-	/// en: 'Handwriting, pages, images and text are synced. If the text of a page is changed on two devices at the same time, the last change is kept.'
-	String get limitations => 'Handwriting, pages, images and text are synced. If the text of a page is changed on two devices at the same time, the last change is kept.';
+	/// en: 'Handwriting, pages, images and text are synced.'
+	String get limitations => 'Handwriting, pages, images and text are synced.';
 
 	/// en: 'Sign in to open your notes.'
 	String get signInRequired => 'Sign in to open your notes.';
@@ -365,6 +385,11 @@ class Translations$editor$en {
 	final Translations _root; // ignore: unused_field
 
 	// Translations
+	late final Translations$editor$flashcards$en flashcards = Translations$editor$flashcards$en.internal(_root);
+
+	/// en: 'Page thumbnails'
+	String get pagePanel => 'Page thumbnails';
+
 	late final Translations$editor$realtime$en realtime = Translations$editor$realtime$en.internal(_root);
 	late final Translations$editor$toolbar$en toolbar = Translations$editor$toolbar$en.internal(_root);
 	late final Translations$editor$pens$en pens = Translations$editor$pens$en.internal(_root);
@@ -662,6 +687,27 @@ class Translations$home$layout$en {
 
 	/// en: 'Simple grid'
 	String get simpleGrid => 'Simple grid';
+
+	/// en: 'Notebooks'
+	String get notebooks => 'Notebooks';
+}
+
+// Path: home.cover
+class Translations$home$cover$en {
+	Translations$home$cover$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Change cover'
+	String get change => 'Change cover';
+
+	/// en: 'Cover'
+	String get title => 'Cover';
+
+	/// en: 'First page'
+	String get firstPage => 'First page';
 }
 
 // Path: sentry.consent
@@ -1164,6 +1210,72 @@ class Translations$profile$faq$3$en {
 
 	/// en: 'Tap on the "Delete account" button above, and login if needed. If you are using the official Saber server, your account will be deleted after a 1 week grace period. You can contact me at adilhanney@disroot.org during this period to cancel the deletion. If you are using a third party server, there might not be an option to delete your account: you'll need to consult the server's privacy policy for more information.'
 	String get a => 'Tap on the "${_root.profile.quickLinks.deleteAccount}" button above, and login if needed.\nIf you are using the official Saber server, your account will be deleted after a 1 week grace period. You can contact me at adilhanney@disroot.org during this period to cancel the deletion.\nIf you are using a third party server, there might not be an option to delete your account: you\'ll need to consult the server\'s privacy policy for more information.';
+}
+
+// Path: editor.flashcards
+class Translations$editor$flashcards$en {
+	Translations$editor$flashcards$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Flashcards'
+	String get mode => 'Flashcards';
+
+	/// en: 'Each page is a card: the question in the top half, the answer in the bottom half.'
+	String get modeDescription => 'Each page is a card: the question in the top half, the answer in the bottom half.';
+
+	/// en: 'Study'
+	String get study => 'Study';
+
+	/// en: 'Show the answer'
+	String get showAnswer => 'Show the answer';
+
+	/// en: 'Again'
+	String get again => 'Again';
+
+	/// en: 'Hard'
+	String get hard => 'Hard';
+
+	/// en: 'Good'
+	String get good => 'Good';
+
+	/// en: 'Easy'
+	String get easy => 'Easy';
+
+	/// en: 'Nothing to study right now'
+	String get nothingDue => 'Nothing to study right now';
+
+	/// en: 'Study every card'
+	String get studyAll => 'Study every card';
+
+	/// en: 'Done!'
+	String get done => 'Done!';
+
+	/// en: 'Cards studied: $n'
+	String doneDescription({required Object n}) => 'Cards studied: ${n}';
+
+	/// en: 'This note has no cards yet. Write a question in the top half of a page and its answer in the bottom half.'
+	String get noCards => 'This note has no cards yet. Write a question in the top half of a page and its answer in the bottom half.';
+
+	/// en: 'Close'
+	String get close => 'Close';
+
+	/// en: '$done / $total'
+	String progress({required Object done, required Object total}) => '${done} / ${total}';
+
+	/// en: '$n min'
+	String minutes({required Object n}) => '${n} min';
+
+	/// en: '$n d'
+	String days({required Object n}) => '${n} d';
+
+	/// en: '$n mo'
+	String months({required Object n}) => '${n} mo';
+
+	/// en: '$n y'
+	String years({required Object n}) => '${n} y';
 }
 
 // Path: editor.realtime

@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logging/logging.dart';
+import 'package:saber/components/home/cover_note_button.dart';
 import 'package:saber/components/home/delete_note_button.dart';
 import 'package:saber/components/home/export_note_button.dart';
+import 'package:saber/components/home/favorite_note_button.dart';
 import 'package:saber/components/home/home_layout_button.dart';
 import 'package:saber/components/home/masonry_files.dart';
 import 'package:saber/components/home/move_note_button.dart';
@@ -19,6 +21,7 @@ import 'package:saber/data/file_manager/file_manager.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/data/routes.dart';
 import 'package:saber/i18n/strings.g.dart';
+import 'package:saber/pages/editor/editor.dart';
 
 class const RecentPage({super.key}) extends StatefulHookWidget {
   @override
@@ -114,6 +117,12 @@ class _RecentPageState extends State<RecentPage> {
     final platform = Theme.of(context).platform;
     final crossAxisCount = MediaQuery.sizeOf(context).width ~/ 300 + 1;
     useListenable(stows.homeLayout);
+    final favorites = [
+      for (final filePath in useValueListenable(stows.favoriteNotes))
+        if (FileManager.doesFileExist(filePath + Editor.extension) ||
+            FileManager.doesFileExist(filePath + Editor.extensionOldJson))
+          filePath,
+    ];
 
     return Scaffold(
       body: CustomScrollView(
@@ -139,8 +148,23 @@ class _RecentPageState extends State<RecentPage> {
               actions: const [HomeLayoutButton(), SyncingButton()],
             ),
           ),
+          if (favorites.isNotEmpty) ...[
+            _SectionTitle(t.home.favorites),
+            SliverSafeArea(
+              bottom: false,
+              sliver: MasonryFiles(
+                crossAxisCount: crossAxisCount,
+                files: favorites,
+                selectedFiles: selectedFiles,
+              ),
+            ),
+            if (!failed) _SectionTitle(t.home.recent),
+          ],
           if (failed) ...[
-            const SliverSafeArea(sliver: SliverToBoxAdapter(child: Welcome())),
+            if (favorites.isEmpty)
+              const SliverSafeArea(
+                sliver: SliverToBoxAdapter(child: Welcome()),
+              ),
           ] else ...[
             SliverSafeArea(
               minimum: const .only(
@@ -170,6 +194,8 @@ class _RecentPageState extends State<RecentPage> {
                   unselectNotes: () => selectedFiles.value = [],
                 ),
               ),
+              FavoriteNoteButton(selectedFiles: selectedFiles.value),
+              CoverNoteButton(selectedFiles: selectedFiles.value),
               MoveNoteButton(
                 filesToMove: selectedFiles.value,
                 unselectNotes: () => selectedFiles.value = [],
@@ -180,6 +206,18 @@ class _RecentPageState extends State<RecentPage> {
               ),
               ExportNoteButton(selectedFiles: selectedFiles.value),
             ],
+    );
+  }
+}
+
+class const _SectionTitle(final String title) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const .fromLTRB(16, 12, 16, 4),
+        child: Text(title, style: TextTheme.of(context).titleMedium),
+      ),
     );
   }
 }

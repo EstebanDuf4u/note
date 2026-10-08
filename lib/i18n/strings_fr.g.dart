@@ -85,6 +85,13 @@ class _Translations$home$fr extends Translations$home$en {
 	@override late final _Translations$home$deleteFolder$fr deleteFolder = _Translations$home$deleteFolder$fr._(_root);
 	@override late final _Translations$home$sort$fr sort = _Translations$home$sort$fr._(_root);
 	@override late final _Translations$home$layout$fr layout = _Translations$home$layout$fr._(_root);
+	@override String get favorites => 'Favoris';
+	@override String get recent => 'Récentes';
+	@override String get search => 'Rechercher dans vos notes';
+	@override String get noSearchResults => 'Aucune note ne correspond à votre recherche';
+	@override String get addToFavorites => 'Ajouter aux favoris';
+	@override String get removeFromFavorites => 'Retirer des favoris';
+	@override late final _Translations$home$cover$fr cover = _Translations$home$cover$fr._(_root);
 }
 
 // Path: sentry
@@ -175,7 +182,7 @@ class _Translations$account$fr extends Translations$account$en {
 	@override String get tapToSignIn => 'Connectez-vous pour synchroniser vos notes entre vos appareils';
 	@override String signedInAs({required Object u}) => 'Connecté en tant que ${u}';
 	@override String get intro => 'Connectez-vous sur chacun de vos appareils, et vos notes y seront synchronisées pendant que vous écrivez.';
-	@override String get limitations => 'L\'écriture, les pages, les images et le texte sont synchronisés. Si le texte d\'une page est modifié sur deux appareils en même temps, la dernière modification est conservée.';
+	@override String get limitations => 'L\'écriture, les pages, les images et le texte sont synchronisés.';
 	@override String get signInRequired => 'Connectez-vous pour ouvrir vos notes.';
 	@override String get server => 'Adresse du serveur';
 	@override String get serverHint => 'Par exemple 192.168.1.10:8787';
@@ -246,6 +253,8 @@ class _Translations$editor$fr extends Translations$editor$en {
 	final TranslationsFr _root; // ignore: unused_field
 
 	// Translations
+	@override late final _Translations$editor$flashcards$fr flashcards = _Translations$editor$flashcards$fr._(_root);
+	@override String get pagePanel => 'Miniatures des pages';
 	@override late final _Translations$editor$realtime$fr realtime = _Translations$editor$realtime$fr._(_root);
 	@override late final _Translations$editor$toolbar$fr toolbar = _Translations$editor$toolbar$fr._(_root);
 	@override late final _Translations$editor$pens$fr pens = _Translations$editor$pens$fr._(_root);
@@ -427,6 +436,19 @@ class _Translations$home$layout$fr extends Translations$home$layout$en {
 	@override String get layout => 'Mise en page';
 	@override String get masonryGrid => 'Grille de maçonnerie';
 	@override String get simpleGrid => 'Grille simple';
+	@override String get notebooks => 'Carnets';
+}
+
+// Path: home.cover
+class _Translations$home$cover$fr extends Translations$home$cover$en {
+	_Translations$home$cover$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get change => 'Changer la couverture';
+	@override String get title => 'Couverture';
+	@override String get firstPage => 'Première page';
 }
 
 // Path: sentry.consent
@@ -722,6 +744,34 @@ class _Translations$profile$faq$3$fr extends Translations$profile$faq$3$en {
 	// Translations
 	@override String get q => 'Comment puis-je supprimer mon compte ?';
 	@override String get a => 'Cliquez sur le button "${_root.profile.quickLinks.deleteAccount}" ci-dessus, et connectez-vous si nécessaire.\nSi vous utilisez le serveur Saber officiel, votre compte sera supprimé au bout d\'une semaine . Durant cette période, vous pourrez me contacter à adilhanney@disroot.org pour annuler la suppression.\nSi vous utilisez un autre serveur, il n\'est pas certain que vous puissiez supprimer votre compte dessus : il vous faudra consulter les règles de confidentialité du serveur pour plus d\'informations.';
+}
+
+// Path: editor.flashcards
+class _Translations$editor$flashcards$fr extends Translations$editor$flashcards$en {
+	_Translations$editor$flashcards$fr._(TranslationsFr root) : this._root = root, super.internal(root);
+
+	final TranslationsFr _root; // ignore: unused_field
+
+	// Translations
+	@override String get mode => 'Fiches de révision';
+	@override String get modeDescription => 'Chaque page est une fiche : la question dans la moitié haute, la réponse dans la moitié basse.';
+	@override String get study => 'Réviser';
+	@override String get showAnswer => 'Afficher la réponse';
+	@override String get again => 'À revoir';
+	@override String get hard => 'Difficile';
+	@override String get good => 'Bien';
+	@override String get easy => 'Facile';
+	@override String get nothingDue => 'Rien à réviser pour le moment';
+	@override String get studyAll => 'Réviser toutes les fiches';
+	@override String get done => 'Terminé !';
+	@override String doneDescription({required Object n}) => 'Fiches révisées : ${n}';
+	@override String get noCards => 'Cette note n\'a pas encore de fiche. Écrivez une question dans la moitié haute d\'une page et sa réponse dans la moitié basse.';
+	@override String get close => 'Fermer';
+	@override String progress({required Object done, required Object total}) => '${done} / ${total}';
+	@override String minutes({required Object n}) => '${n} min';
+	@override String days({required Object n}) => '${n} j';
+	@override String months({required Object n}) => '${n} mois';
+	@override String years({required Object n}) => '${n} an(s)';
 }
 
 // Path: editor.realtime

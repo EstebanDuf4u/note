@@ -31,6 +31,7 @@ class EditorBottomSheet extends StatefulWidget {
     required this.canRasterPdf,
     required this.getIsWatchingServer,
     required this.setIsWatchingServer,
+    required this.setFlashcards,
   });
 
   final bool invert;
@@ -49,6 +50,7 @@ class EditorBottomSheet extends StatefulWidget {
   final bool canRasterPdf;
   final bool Function() getIsWatchingServer;
   final void Function(bool) setIsWatchingServer;
+  final void Function(bool) setFlashcards;
 
   @override
   State<EditorBottomSheet> createState() => _EditorBottomSheetState();
@@ -78,6 +80,16 @@ class _EditorBottomSheetState extends State<EditorBottomSheet> {
         child: ListView(
           shrinkWrap: true,
           children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.style),
+              title: Text(t.editor.flashcards.mode),
+              subtitle: Text(t.editor.flashcards.modeDescription),
+              value: widget.coreInfo.flashcards,
+              onChanged: widget.coreInfo.readOnly
+                  ? null
+                  : (value) => setState(() => widget.setFlashcards(value)),
+            ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,

@@ -79,6 +79,17 @@ home:
     layout: Mise en page
     masonryGrid: Grille de maçonnerie
     simpleGrid: Grille simple
+    notebooks: Carnets
+  favorites: Favoris
+  recent: Récentes
+  search: Rechercher dans vos notes
+  noSearchResults: Aucune note ne correspond à votre recherche
+  addToFavorites: Ajouter aux favoris
+  removeFromFavorites: Retirer des favoris
+  cover:
+    change: Changer la couverture
+    title: Couverture
+    firstPage: Première page
 sentry:
   consent:
     title: Aide à améliorer Saber ?
@@ -233,7 +244,7 @@ account:
   tapToSignIn: Connectez-vous pour synchroniser vos notes entre vos appareils
   signedInAs: Connecté en tant que $u
   intro: Connectez-vous sur chacun de vos appareils, et vos notes y seront synchronisées pendant que vous écrivez.
-  limitations: L'écriture, les pages, les images et le texte sont synchronisés. Si le texte d'une page est modifié sur deux appareils en même temps, la dernière modification est conservée.
+  limitations: L'écriture, les pages, les images et le texte sont synchronisés.
   signInRequired: Connectez-vous pour ouvrir vos notes.
   server: Adresse du serveur
   serverHint: Par exemple 192.168.1.10:8787
@@ -300,6 +311,27 @@ update:
   update: Mettre à jour
   downloadNotAvailableYet: Le téléchargement n'est pas encore disponible sur votre plateforme. Veuillez vérifier.
 editor:
+  flashcards:
+    mode: Fiches de révision
+    modeDescription: "Chaque page est une fiche : la question dans la moitié haute, la réponse dans la moitié basse."
+    study: Réviser
+    showAnswer: Afficher la réponse
+    again: À revoir
+    hard: Difficile
+    good: Bien
+    easy: Facile
+    nothingDue: Rien à réviser pour le moment
+    studyAll: Réviser toutes les fiches
+    done: Terminé !
+    doneDescription: "Fiches révisées : $n"
+    noCards: "Cette note n'a pas encore de fiche. Écrivez une question dans la moitié haute d'une page et sa réponse dans la moitié basse."
+    close: Fermer
+    progress: $done / $total
+    minutes: $n min
+    days: $n j
+    months: $n mois
+    years: $n an(s)
+  pagePanel: Miniatures des pages
   realtime:
     offline: Synchro temps réel hors ligne. Vos modifications seront envoyées à la reconnexion.
     catchingUp: Récupération des modifications de vos autres appareils…

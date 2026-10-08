@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:bson/bson.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_quill/quill_delta.dart';
 import 'package:logging/logging.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/page.dart';
@@ -44,7 +46,6 @@ class RealtimeSession {
     required this.onRemoteChange,
     required this.onLocalStateChange,
     this.onStopped,
-    this.hasUnsentText,
     this.minReconnectDelay = const Duration(seconds: 1),
     this.maxReconnectDelay = const Duration(seconds: 30),
   });
@@ -76,10 +77,6 @@ class RealtimeSession {
 
   /// Called when this session gives up on syncing the note.
   final void Function(RealtimeStopReason reason)? onStopped;
-
-  /// Returns whether the text of a page has changes
-  /// that haven't been passed to [submit] yet.
-  final bool Function(EditorPage page)? hasUnsentText;
 
   final Duration minReconnectDelay, maxReconnectDelay;
 
@@ -124,9 +121,92 @@ class RealtimeSession {
       if (state.value != .live) _dropSupersededText(coreInfo, op);
       final envelope = <String, dynamic>{'cid': _newOpId(), 'd': op};
       coreInfo.pendingOps.add(envelope);
-      if (state.value == .live) _send({'k': 'op', ...envelope});
+      _sendIfReady(envelope);
     }
     onLocalStateChange();
+  }
+
+  /// Call this when the text of [page] may have changed on this device,
+  /// to send the change to the other devices.
+  void textChanged(EditorPage page) {
+    final envelope = _queueTextChange(coreInfo, page);
+    if (envelope == null) return;
+    _sendIfReady(envelope);
+    onLocalStateChange();
+  }
+
+  /// Same as [textChanged], for a note that has no session:
+  /// the change is sent the next time the note is synced.
+  static void textChangedWithoutSession(
+    EditorCoreInfo coreInfo,
+    EditorPage page,
+  ) => _queueTextChange(coreInfo, page);
+
+  static bool _isTextOp(Map<dynamic, dynamic> op) =>
+      op['t'] == NoteOps.textType || op['t'] == NoteOps.textDeltaType;
+
+  /// The pending operations that change the text of the page with id
+  /// [pageId], oldest first.
+  static Iterable<Map<String, dynamic>> _pendingTextOps(
+    EditorCoreInfo coreInfo,
+    String pageId,
+  ) => coreInfo.pendingOps.where((pending) {
+    final op = pending['d'] as Map;
+    return _isTextOp(op) && op['pg'] == pageId;
+  });
+
+  /// Queues how the text of [page] has changed since its last operation.
+  ///
+  /// Returns the envelope of the new operation, or null if there was no
+  /// change or it was merged into an operation that hasn't been sent yet.
+  static Map<String, dynamic>? _queueTextChange(
+    EditorCoreInfo coreInfo,
+    EditorPage page,
+  ) {
+    final op = NoteOps.textChange(page, base: coreInfo.realtimeSeq ?? 0);
+    if (op == null) return null;
+    // A note that has never been synced is sent as a whole.
+    if (coreInfo.realtimeSeq == null) return null;
+
+    // The changes to a text are sent one at a time (see [_sendIfReady]),
+    // so those made while one is on its way are sent together.
+    final last = _pendingTextOps(coreInfo, page.id).lastOrNull;
+    if (last != null && last['sent'] != true) {
+      final lastOp = last['d'] as Map;
+      if (lastOp['t'] == NoteOps.textDeltaType) {
+        lastOp['d'] = Delta.fromJson(lastOp['d'] as List)
+            .compose(Delta.fromJson(op['d'] as List))
+            .toJson();
+        return null;
+      }
+    }
+
+    final envelope = <String, dynamic>{'cid': _newOpId(), 'd': op};
+    coreInfo.pendingOps.add(envelope);
+    return envelope;
+  }
+
+  /// Sends the pending operation in [envelope] if we're connected.
+  ///
+  /// A change to the text of a page waits until the server has acknowledged
+  /// the previous change to that text, because the server merges each change
+  /// with those of other devices, and assumes that it follows our last one.
+  void _sendIfReady(Map<String, dynamic> envelope) {
+    if (state.value != .live) return;
+    final op = envelope['d'] as Map;
+    if (_isTextOp(op)) {
+      final first = _pendingTextOps(coreInfo, op['pg'] as String).firstOrNull;
+      if (!identical(first, envelope)) return;
+    }
+    envelope['sent'] = true;
+    _send({'k': 'op', 'cid': envelope['cid'], 'd': op});
+  }
+
+  /// Sends the next change to the text of the page with id [pageId],
+  /// now that the previous one has been acknowledged.
+  void _sendNextTextOp(String pageId) {
+    final next = _pendingTextOps(coreInfo, pageId).firstOrNull;
+    if (next != null) _sendIfReady(next);
   }
 
   /// A page's text is sent whole, so while we're offline only
@@ -214,8 +294,8 @@ class RealtimeSession {
       case 'op':
         _onRemoteOp(message);
       case 'ack':
-        _removePending(opInt(message['cid']));
         _advanceSeq(opInt(message['seq']));
+        _removePending(opInt(message['cid']));
         onLocalStateChange();
       case 'synced':
         _onSynced(opInt(message['head']));
@@ -248,19 +328,21 @@ class RealtimeSession {
       }
     } else {
       try {
-        applier.apply(
-          op,
-          pendingLocalOps: coreInfo.pendingOps.map(
-            (pending) => Map<String, dynamic>.from(pending['d'] as Map),
-          ),
-          // An unsynced note's strokes are all sent once we've caught up
-          isUnsent: (stroke) =>
-              _needsSnapshot && !applier.addedStrokeIds.contains(stroke.id),
-          // An unsynced note's text is sent once we've caught up too
-          keepLocalText: (page) =>
-              (_needsSnapshot && !page.quill.controller.document.isEmpty()) ||
-              (hasUnsentText?.call(page) ?? false),
-        );
+        if (op['t'] == NoteOps.textDeltaType) {
+          _onRemoteTextChange(op, seq);
+        } else {
+          applier.apply(
+            op,
+            pendingLocalOps: coreInfo.pendingOps.map(
+              (pending) => Map<String, dynamic>.from(pending['d'] as Map),
+            ),
+            // An unsynced note's strokes are all sent once we've caught up
+            isUnsent: (stroke) =>
+                _needsSnapshot && !applier.addedStrokeIds.contains(stroke.id),
+            // An unsynced note's text is sent once we've caught up too
+            keepLocalText: _keepsLocalText,
+          );
+        }
       } catch (e, st) {
         log.severe('Failed to apply operation $seq: $e', e, st);
       }
@@ -269,6 +351,37 @@ class RealtimeSession {
 
     _advanceSeq(seq);
     onLocalStateChange();
+  }
+
+  bool _keepsLocalText(EditorPage page) =>
+      _needsSnapshot && !page.quill.controller.document.isEmpty();
+
+  /// Applies a change that another device made to the text of a page.
+  ///
+  /// The server has numbered it before our own changes that it hasn't
+  /// acknowledged yet, so it's transformed to apply after them here, and they
+  /// are transformed to apply after it on the server, which does the same.
+  void _onRemoteTextChange(NoteOp op, int seq) {
+    final pageId = op['pg'] as String;
+    final page = applier.pageForText(pageId);
+
+    // Take note of what was just typed, which we may not have been told yet.
+    textChanged(page);
+    if (_keepsLocalText(page)) return;
+
+    final pending = _pendingTextOps(coreInfo, pageId).toList();
+    // Our whole text is on its way, and replaces whatever came before it.
+    if (pending.any((p) => (p['d'] as Map)['t'] == NoteOps.textType)) return;
+
+    var remote = Delta.fromJson(op['d'] as List);
+    for (final envelope in pending) {
+      final localOp = envelope['d'] as Map;
+      final local = Delta.fromJson(localOp['d'] as List);
+      localOp['d'] = remote.transform(local, true).toJson();
+      localOp['b'] = seq;
+      remote = local.transform(remote, false);
+    }
+    applier.applyTextChange(pageId, remote);
   }
 
   void _onSynced(int head) {
@@ -300,15 +413,21 @@ class RealtimeSession {
         ),
       );
     } else {
-      for (final envelope in coreInfo.pendingOps) {
-        _send({'k': 'op', ...envelope});
-      }
+      coreInfo.pendingOps.toList().forEach(_sendIfReady);
     }
     onLocalStateChange();
   }
 
+  /// Forgets the pending operation that the server has acknowledged.
   void _removePending(int cid) {
-    coreInfo.pendingOps.removeWhere((pending) => opInt(pending['cid']) == cid);
+    final acknowledged = coreInfo.pendingOps
+        .where((pending) => opInt(pending['cid']) == cid)
+        .toList();
+    for (final envelope in acknowledged) {
+      coreInfo.pendingOps.remove(envelope);
+      final op = envelope['d'] as Map;
+      if (_isTextOp(op)) _sendNextTextOp(op['pg'] as String);
+    }
   }
 
   void _advanceSeq(int seq) {

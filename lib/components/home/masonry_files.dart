@@ -81,6 +81,17 @@ class _MasonryFilesState extends State<MasonryFiles> {
           itemCount: widget.files.length,
           itemBuilder: itemBuilder,
         ),
+        .notebooks => SliverGrid.builder(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 190,
+            mainAxisSpacing: 20,
+            crossAxisSpacing: 20,
+            // a portrait cover, with two lines for the name and one for the date
+            childAspectRatio: 0.58,
+          ),
+          itemCount: widget.files.length,
+          itemBuilder: itemBuilder,
+        ),
       },
     );
   }

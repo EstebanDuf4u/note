@@ -4,7 +4,7 @@
     https://www.freedesktop.org/software/appstream/metainfocreator/#/
 -->
 <component type="desktop-application">
-    <id>com.adilhanney.saber</id>
+    <id>fr.noryx.noteplus</id>
 
     <name>Saber</name>
     <summary>The notes app built for handwriting</summary>
@@ -468,7 +468,7 @@
 
     </description>
 
-    <launchable type="desktop-id">com.adilhanney.saber.desktop</launchable>
+    <launchable type="desktop-id">fr.noryx.noteplus.desktop</launchable>
 
     <content_rating type="oars-1.1" />
 

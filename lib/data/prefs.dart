@@ -169,8 +169,15 @@ class Stows {
 
   final editorToolbarAlignment = PlainStow(
     'editorToolbarAlignment',
-    AxisDirection.down,
+    AxisDirection.up,
     codec: const EnumCodec(AxisDirection.values),
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// Whether the editor shows the page thumbnails at its side.
+  final editorPagePanel = PlainStow(
+    'editorPagePanel',
+    false,
     volatile: !_isOnMainIsolate,
   );
   final editorToolbarShowInFullscreen = PlainStow(
@@ -376,7 +383,7 @@ class Stows {
 
   final homeLayout = PlainStow(
     'homeLayout',
-    HomeLayout.masonryGrid,
+    HomeLayout.notebooks,
     codec: HomeLayout.codec,
     volatile: !_isOnMainIsolate,
   );
@@ -391,6 +398,18 @@ class Stows {
     <String>[],
     volatile: !_isOnMainIsolate,
   );
+
+  /// The paths of the notes that the user marked as favorites,
+  /// without their file extension. See [NoteLibrary].
+  final favoriteNotes = PlainStow(
+    'favoriteNotes',
+    <String>[],
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// A json map from the path of each note that has a cover
+  /// to the index of the cover's color. See [NoteLibrary].
+  final noteCovers = PlainStow('noteCovers', '{}', volatile: !_isOnMainIsolate);
 
   /// File paths that have been deleted locally
   final fileSyncAlreadyDeleted = PlainStow(

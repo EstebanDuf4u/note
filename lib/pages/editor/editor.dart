@@ -29,6 +29,7 @@ import 'package:saber/components/theming/saber_theme.dart';
 import 'package:saber/components/toolbar/color_bar.dart';
 import 'package:saber/components/toolbar/editor_bottom_sheet.dart';
 import 'package:saber/components/toolbar/editor_page_manager.dart';
+import 'package:saber/components/toolbar/editor_page_panel.dart';
 import 'package:saber/components/toolbar/toolbar.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
 import 'package:saber/data/editor/editor_exporter.dart';
@@ -53,6 +54,7 @@ import 'package:saber/data/tools/pencil.dart';
 import 'package:saber/data/tools/select.dart';
 import 'package:saber/data/tools/shape_pen.dart';
 import 'package:saber/i18n/strings.g.dart';
+import 'package:saber/pages/editor/study.dart';
 import 'package:saber/pages/home/whiteboard.dart';
 import 'package:sbn/change.dart';
 import 'package:super_clipboard/super_clipboard.dart';
@@ -307,7 +309,6 @@ class EditorState extends State<Editor> {
         onImageAdded: _listenToImage,
         unsizedImages: _unsizedImages,
       ),
-      hasUnsentText: _pagesWithUnsentText.contains,
       onRemoteChange: () {
         if (!mounted) return;
         setState(() {});
@@ -399,23 +400,41 @@ class EditorState extends State<Editor> {
       };
   }
 
-  /// The pages whose text has changed since it was last sent.
-  final _pagesWithUnsentText = <EditorPage>{};
-  Timer? _sendTextTimer;
-
-  /// Sends the text of the pages in [_pagesWithUnsentText].
-  ///
-  /// Text is sent a few times a second rather than on every keystroke.
-  void _sendUnsentText() {
-    _sendTextTimer?.cancel();
-    _sendTextTimer = null;
-    final pages = _pagesWithUnsentText.toList();
-    _pagesWithUnsentText.clear();
-    _submitOps([
-      for (final page in pages)
-        if (coreInfo.pages.contains(page)) NoteOps.text(page),
-    ]);
+  /// Saves a change that isn't recorded in [history],
+  /// which is otherwise how we know that the note needs saving.
+  void _saveChangeOutsideHistory() {
+    _hasUnsavedRealtimeChanges = true;
+    autosaveAfterDelay();
   }
+
+  /// Lets the user study this note's pages as flashcards.
+  Future<void> _study() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (context) => StudyPage(
+          coreInfo: coreInfo,
+          onGraded: (page) {
+            _submitOps([NoteOps.study(page)]);
+            _saveChangeOutsideHistory();
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Sends the changes to the text of [page] to the user's other devices.
+  void _textChanged(EditorPage page) {
+    if (_realtime case final realtime?) {
+      realtime.textChanged(page);
+    } else {
+      RealtimeSession.textChangedWithoutSession(coreInfo, page);
+    }
+  }
+
+  /// Takes note of the text that was just typed, which we may not have
+  /// been told about yet, so that it isn't saved without being sent.
+  void _noteTextChanges() => coreInfo.pages.forEach(_textChanged);
 
   void _setState() => setState(() {});
 
@@ -990,13 +1009,7 @@ class EditorState extends State<Editor> {
       if (undoRedoButtonsNeedUpdating) {
         setState(() {});
       }
-      if (page != null) {
-        _pagesWithUnsentText.add(page);
-        _sendTextTimer ??= Timer(
-          const Duration(milliseconds: 300),
-          _sendUnsentText,
-        );
-      }
+      if (page != null) _textChanged(page);
       autosaveAfterDelay();
     });
     quill.focusNode.addListener(_onQuillFocusChange);
@@ -1108,6 +1121,7 @@ class EditorState extends State<Editor> {
 
   Future<void> saveToFile() async {
     if (coreInfo.readOnly) return;
+    _noteTextChanges();
 
     switch (savingState.value) {
       case .saved:
@@ -1827,6 +1841,38 @@ class EditorState extends State<Editor> {
       );
     }
 
+    // The page thumbnails slide over the note rather than squeezing it.
+    final showPagePanel =
+        stows.editorPagePanel.value && !DynamicMaterialApp.isFullscreen;
+    final Widget bodyWithPagePanel = Stack(
+      children: [
+        Positioned.fill(child: body),
+        if (showPagePanel)
+          PositionedDirectional(
+            start: 0,
+            top: 0,
+            bottom: 0,
+            child: EditorPagePanel(
+              coreInfo: coreInfo,
+              transformationController: _transformationController,
+              // the page that fills the top of the screen, even
+              // when its top edge is just below the toolbar
+              getCurrentPageIndex: () => getPageIndexFromScrollPosition(
+                scrollY: -scrollY + 100,
+                screenWidth: MediaQuery.sizeOf(context).width,
+                pages: coreInfo.pages,
+              ),
+              onPageTap: (pageIndex) => CanvasGestureDetector.scrollToPage(
+                pageIndex: pageIndex,
+                pages: coreInfo.pages,
+                screenWidth: MediaQuery.sizeOf(context).width,
+                transformationController: _transformationController,
+              ),
+            ),
+          ),
+      ],
+    );
+
     return ValueListenableBuilder(
       valueListenable: savingState,
       builder: (context, savingState, child) {
@@ -1834,13 +1880,15 @@ class EditorState extends State<Editor> {
         return PopScope(
           canPop: savingState == .saved,
           onPopInvokedWithResult: (didPop, _) {
+            // The editor can be closed without the user going back, e.g.
+            // when their session ends and the app returns to the sign in
+            // page. The note is then saved as the editor is disposed.
+            if (didPop) return;
             switch (savingState) {
               case .waitingToSave:
-                assert(!didPop);
                 saveToFile(); // trigger save now
                 snackBarNeedsToSaveBeforeExiting();
               case .saving:
-                assert(!didPop);
                 snackBarNeedsToSaveBeforeExiting();
               case .saved:
                 break;
@@ -1893,6 +1941,24 @@ class EditorState extends State<Editor> {
                         ),
                       ),
                     ),
+                  if (coreInfo.flashcards)
+                    IconButton(
+                      icon: const Icon(Icons.style),
+                      tooltip: t.editor.flashcards.study,
+                      onPressed: _study,
+                    ),
+                  IconButton(
+                    icon: Icon(
+                      stows.editorPagePanel.value
+                          ? Icons.view_sidebar
+                          : Icons.view_sidebar_outlined,
+                    ),
+                    tooltip: t.editor.pagePanel,
+                    onPressed: () => setState(() {
+                      stows.editorPagePanel.value =
+                          !stows.editorPagePanel.value;
+                    }),
+                  ),
                   IconButton(
                     icon: const AdaptiveIcon(
                       icon: Icons.insert_page_break,
@@ -1945,7 +2011,7 @@ class EditorState extends State<Editor> {
                   ),
                 ],
               ),
-        body: body,
+        body: bodyWithPagePanel,
         floatingActionButton:
             (DynamicMaterialApp.isFullscreen &&
                 !stows.editorToolbarShowInFullscreen.value)
@@ -2034,6 +2100,12 @@ class EditorState extends State<Editor> {
       pickPhotos: _pickPhotos,
       importPdf: importPdf,
       canRasterPdf: Editor.canRasterPdf,
+      setFlashcards: (flashcards) => setState(() {
+        if (coreInfo.readOnly || coreInfo.flashcards == flashcards) return;
+        coreInfo.flashcards = flashcards;
+        _submitOps([NoteOps.flashcards(coreInfo)]);
+        _saveChangeOutsideHistory();
+      }),
       getIsWatchingServer: () => _watchServerTimer?.isActive ?? false,
       setIsWatchingServer: (bool watch) {
         if (watch) {
@@ -2304,7 +2376,7 @@ class EditorState extends State<Editor> {
     _delayedSaveTimer?.cancel();
     _watchServerTimer?.cancel();
     _lastSeenPointerCountTimer?.cancel();
-    _sendUnsentText();
+    _noteTextChanges();
     _syncedPathWhenClosed = _realtime?.room;
     _realtime?.dispose();
 

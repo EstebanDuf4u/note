@@ -240,13 +240,18 @@ class _Device {
     session?.submit(lastOps);
   }
 
-  /// Types [text] at the start of the page, as the editor sends it.
-  void type(int pageIndex, String text) {
+  /// Types [text] in the page (at its start, unless [at] is given),
+  /// and sends the change as the editor does.
+  void type(int pageIndex, String text, {int at = 0}) {
     final page = pages[pageIndex];
-    page.quill.controller.replaceText(0, 0, text, null);
+    page.quill.controller.replaceText(at, 0, text, null);
     createPage(pageIndex);
-    lastOps = [NoteOps.text(page)];
-    session?.submit(lastOps);
+    if (session case final session?) {
+      session.textChanged(page);
+      lastOps = [];
+    } else {
+      lastOps = [?NoteOps.textChange(page, base: coreInfo.realtimeSeq ?? 0)];
+    }
   }
 
   String textOf(int pageIndex) =>
@@ -561,17 +566,22 @@ void main() {
       // the receiving device can't undo what the other device typed
       expect(b.pages.first.quill.controller.hasUndo, isFalse);
 
+      // only what changed is sent
+      expect(a.lastOps.single['t'], NoteOps.textDeltaType);
+      a.type(0, ', world', at: 5);
+      expect(a.lastOps.single['d'], [
+        {'retain': 5},
+        {'insert': ', world'},
+      ]);
+      b.receive(a.lastOps);
+      expect(b.textOf(0), 'Hello, world\n');
+
       a.pages.first.quill.controller.formatText(0, 5, Attribute.bold);
-      b.receive([NoteOps.text(a.pages.first)]);
+      b.receive([?NoteOps.textChange(a.pages.first, base: 0)]);
       expect(b.contents, a.contents);
 
-      // local changes that are about to be sent aren't overwritten
-      b.type(0, 'B: ');
-      a.type(0, 'A: ');
-      b.applier.apply(a.lastOps.single, pendingLocalOps: b.lastOps);
-      expect(b.textOf(0), 'B: Hello\n');
-      a.receive(b.lastOps);
-      expect(a.contents, b.contents);
+      // nothing is sent when nothing changed
+      expect(NoteOps.textChange(a.pages.first, base: 0), isNull);
     });
 
     test('inserting and deleting pages', () {
@@ -785,10 +795,62 @@ void main() {
       await live(a);
       await live(b);
 
-      a.type(0, 'from a');
-      b.type(0, 'from b');
+      a.type(0, 'from a. ');
+      b.type(0, 'from b. ');
       await inSync(a, b);
-      expect(a.textOf(0), anyOf('from a\n', 'from b\n'));
+      expect(a.textOf(0), anyOf('from a. from b. \n', 'from b. from a. \n'));
+    });
+
+    test('two devices type in different places of the same text', () async {
+      final a = device('a'), b = device('b');
+      await live(a);
+      await live(b);
+      a.type(0, 'The quick fox');
+      await inSync(a, b);
+
+      // at the same time, and faster than the server answers
+      a.type(0, ' brown', at: 9);
+      b.type(0, ' jumps', at: 13);
+      a.type(0, ' very', at: 3);
+      b.type(0, '.', at: 19);
+      a.type(0, 'Look: ');
+      await inSync(a, b);
+      expect(a.textOf(0), 'Look: The very quick brown fox jumps.\n');
+
+      // and deleting what the other device is typing into
+      a.pages[0].quill.controller.replaceText(0, 6, '', null);
+      a.session!.textChanged(a.pages[0]);
+      b.type(0, 'here', at: 4);
+      await inSync(a, b);
+      expect(a.textOf(0), 'hereThe very quick brown fox jumps.\n');
+    });
+
+    test('text typed offline on two devices is merged', () async {
+      final a = device('a'), b = device('b');
+      await live(a);
+      await live(b);
+      a.type(0, 'Shopping: ');
+      await inSync(a, b);
+
+      final port = server.port;
+      await server.stop();
+      await _until(() => a.session!.state.value == .offline);
+      await _until(() => b.session!.state.value == .offline);
+      a.type(0, 'milk', at: 10);
+      a.type(0, ', eggs', at: 14);
+      b.type(0, 'My ');
+
+      // one of the devices is restarted before it reconnects
+      a.session!.dispose();
+      devices.remove(a);
+      final restarted = await a.restarted();
+      devices.add(restarted);
+
+      server = RelayServer(dataDirectory: dataDirectory);
+      await server.start(address: InternetAddress.loopbackIPv4, port: port);
+      restarted.connect(server);
+      await inSync(restarted, b);
+      expect(b.textOf(0), 'My Shopping: milk, eggs\n');
     });
 
     test('an existing note is shared with its images and text', () async {
