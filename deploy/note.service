@@ -1,0 +1,32 @@
+# The Note+ server: sync, accounts and the web editor.
+# Installed by deploy/setup-server.sh as /etc/systemd/system/note.service.
+
+[Unit]
+Description=Note+ server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=note
+Group=note
+# NOTE_ARGS can be set in /etc/note/note.env, e.g. NOTE_ARGS=--no-registration
+EnvironmentFile=-/etc/note/note.env
+ExecStart=/opt/note/current/bin/note-server --port 8787 --data /var/lib/note $NOTE_ARGS
+Restart=on-failure
+RestartSec=3
+
+# Hardening: the server only needs its data directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/note
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
