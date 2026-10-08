@@ -28,6 +28,20 @@ dart run bin/server.dart --data ./data --port 8787
 Then sign in from the app with the server's address, e.g. `192.168.1.10:8787`.
 Pass `--no-registration` once your accounts are created.
 
+## Deployment
+
+Every push to `main` runs `.github/workflows/note.yml`: it tests the server,
+the web editor and the app's sync, compiles the server, and deploys it to the
+OVH server behind https://note.noryx.fr. The web editor is served by the same
+server, so it can be used from any browser, e.g. on an iPhone, without the app.
+
+The server was prepared once with `deploy/setup-server.sh` (users, systemd
+service `note`, nginx site, certificate). Each release goes to
+`/opt/note/releases/<commit>`, `/opt/note/current` points to the running one,
+and the data lives in `/var/lib/note`. If a new release doesn't answer, the
+previous one is put back. Server options go in `/etc/note/note.env`, e.g.
+`NOTE_ARGS=--no-registration` once everyone has their account.
+
 ## Building the app
 
 Note+ is a Flutter app. With the Flutter version pinned in `pubspec.yaml`:
