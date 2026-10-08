@@ -15,6 +15,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:saber/components/home/sort_button.dart';
 import 'package:saber/data/nextcloud/saber_syncer.dart';
 import 'package:saber/data/note_library.dart';
+import 'package:saber/data/open_tabs.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/editor.dart';
@@ -945,6 +946,7 @@ class FileManager {
 
     if (!assetFileRegex.hasMatch(fromPath)) {
       NoteLibrary.noteRenamed(fromPath, toPath);
+      OpenTabs.noteRenamed(fromPath, toPath);
     }
   }
 
@@ -957,7 +959,10 @@ class FileManager {
     stows.recentFiles.notifyListeners();
 
     // The old format's file is removed when a note is saved in the new one.
-    if (filePath.endsWith(Editor.extension)) NoteLibrary.noteRemoved(filePath);
+    if (filePath.endsWith(Editor.extension)) {
+      NoteLibrary.noteRemoved(filePath);
+      OpenTabs.noteRemoved(filePath);
+    }
   }
 
   static Future _saveFileAsRecentlyAccessed(String filePath) async {
