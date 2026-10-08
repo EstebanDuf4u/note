@@ -1,3 +1,0 @@
-• Adicionada uma tradução em tailandês de Anucha Hlownonkor
-• Adicionada uma tradução para esloveno de Tadej Pusnik
-• Se uma nota estiver no modo somente leitura, você verá agora o motivo

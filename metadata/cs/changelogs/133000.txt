@@ -1,3 +1,0 @@
-• Funkce: Nyní můžete exportovat aktuální stránku jako PNG 
-• Opraveno: Indikátor průběhu synchronizace se zasekl, když se přenos nezdaří 
-• Tweak: Snížená frekvence opakování neúspěšných synchronizačních přenosů

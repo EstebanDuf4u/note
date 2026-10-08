@@ -1,3 +1,0 @@
-• Javította az animáció simaságát a jegyzet bezárásakor. 
-• Az egérgörgő most görget a nagyítás helyett. A nagyításhoz használja a Ctrl billentyű görgőjét. 
-• Kevésbé kerekítette az Új jegyzet gombot.

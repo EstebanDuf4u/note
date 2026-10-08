@@ -1,2 +1,0 @@
-• Opraveny některé kódy pro manipulaci se soubory, vyřešení problémů se sdílením PDF do Saber z jiné aplikace
-• Opravena nesprávná předběžně načítaná stránka PDF

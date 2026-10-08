@@ -1,3 +1,0 @@
-• Strona przeglądania jest teraz domyślnie posortowana alfabetycznie. Możesz dostosować sortowanie za pomocą przycisku na górze.
-• Naprawiono błąd powodujący awarię na niektórych urządzeniach z systemem Android.
-• Usunięto funkcję przewijania w górę w celu odświeżenia, ponieważ była myląca.

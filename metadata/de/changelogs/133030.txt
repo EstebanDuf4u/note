@@ -1,3 +1,0 @@
-• Fehler behoben, bei dem die Einstellung „Radiergummi nach Gebrauch deaktivieren“ nicht ausgeschaltet wurde
-• Speicherleck im Fling-Geste-Handling behoben
-• Onyx SDK für Onyx Boox-Geräte aktualisiert

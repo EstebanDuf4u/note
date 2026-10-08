@@ -299,11 +299,13 @@ profile:
   quotaUsageUncapped(OUTDATED): Vous utilisez $used
 appInfo:
   licenseNotice: |-
+    Note+  Copyright © 2026  Noryx
     Saber  Copyright © 2022-$buildYear  Adil Hanney
     Ce programme est livré sans aucune garantie. Il s'agit d'un logiciel libre, et vous pouvez le diffuser sous certaines conditions.
   debug: DEBUG
   sponsorButton: Appuyer ici pour me soutenir ou acheter ou acheter plus d'espace de stockage
   licenseButton: Appuyer ici pour plus d'information de licence
+  basedOnSaber: "Basé sur Saber : voir son code source"
   privacyPolicyButton: Appuyez ici pour voir la politique de confidentialité
 update:
   updateAvailable: Mise à jour disponible

@@ -256,6 +256,7 @@ profile:
   quotaUsageUncapped(OUTDATED): Du verwendest $used
 appInfo:
   licenseNotice: |-
+    Note+  Copyright © 2026  Noryx
     Saber  Copyright © 2022-$buildYear  Adil Hanney
     Dieses Programm kommt ohne jegliche Gewährleistung. Dies ist freie Software und du bist herzlich eingeladen, diese unter bestimmten Bedingungen weiterzuverteilen.
   debug: DEBUG

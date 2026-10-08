@@ -191,7 +191,7 @@ class _Translations$appInfo$de extends Translations$appInfo$en {
 	final TranslationsDe _root; // ignore: unused_field
 
 	// Translations
-	@override String licenseNotice({required Object buildYear}) => 'Saber  Copyright © 2022-${buildYear}  Adil Hanney\nDieses Programm kommt ohne jegliche Gewährleistung. Dies ist freie Software und du bist herzlich eingeladen, diese unter bestimmten Bedingungen weiterzuverteilen.';
+	@override String licenseNotice({required Object buildYear}) => 'Note+  Copyright © 2026  Noryx\nSaber  Copyright © 2022-${buildYear}  Adil Hanney\nDieses Programm kommt ohne jegliche Gewährleistung. Dies ist freie Software und du bist herzlich eingeladen, diese unter bestimmten Bedingungen weiterzuverteilen.';
 	@override String get debug => 'DEBUG';
 	@override String get sponsorButton => 'Hier tippen, um mich zu unterstützen oder mehr Speicherplatz zu kaufen';
 	@override String get licenseButton => 'Hier tippen, um weitere Lizenzinformationen anzuzeigen';

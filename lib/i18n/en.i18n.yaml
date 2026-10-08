@@ -299,11 +299,13 @@ profile:
       If you are using a third party server, there might not be an option to delete your account: you'll need to consult the server's privacy policy for more information.
 appInfo:
   licenseNotice: |-
+    Note+  Copyright © 2026  Noryx
     Saber  Copyright © 2022-$buildYear  Adil Hanney
     This program comes with absolutely no warranty. This is free software, and you are welcome to redistribute it under certain conditions.
   debug: DEBUG
   sponsorButton: Tap here to sponsor me or buy more storage
   licenseButton: Tap here to view more license information
+  basedOnSaber: "Based on Saber: view its source code"
   privacyPolicyButton: Tap here to view the privacy policy
 update:
   updateAvailable: Update available

@@ -1,2 +1,0 @@
-• Ridotto il consumo di RAM riducendo i thread non necessari
-• Correzioni varie dalle dipendenze

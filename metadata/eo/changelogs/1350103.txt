@@ -1,2 +1,0 @@
-• Redukita konsumo de RAM per reduktado de necezasaj tradoj
-• Diversaj koreoj el dependencoj

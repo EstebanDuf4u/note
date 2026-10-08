@@ -1,1 +1,0 @@
-Ŝaltis la version al 1.x por reflekti la maturecon de la aplikaĵo kaj lasi la numerojn de versioj esti pli signifaj.

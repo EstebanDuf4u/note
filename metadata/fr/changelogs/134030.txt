@@ -1,4 +1,0 @@
-• Corrigé quelques pages blanches apparaissant dans les PDF exportés.
-• Amélioré la fluidité du défilement dans l'éditeur.
-• Ajout d'une traduction néerlandaise.
-• Ajout d'une traduction portugaise en plus de la traduction portugaise brésilienne existante.

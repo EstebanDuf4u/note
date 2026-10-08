@@ -1,1 +1,0 @@
-Seitenzahlen berücksichtigen jetzt Ihre Atkinson Hyperlegible-Schriftarteinstellung.

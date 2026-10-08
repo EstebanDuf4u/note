@@ -1,3 +1,0 @@
-• Funzionalità: ora puoi esportare la pagina corrente come PNG
-• Risolto: l'indicatore di avanzamento della sincronizzazione si bloccava quando un trasferimento falliva
-• Modifica: ridotta la frequenza dei tentativi di trasferimento di sincronizzazione non riuscita

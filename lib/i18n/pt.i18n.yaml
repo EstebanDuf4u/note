@@ -239,6 +239,7 @@ profile:
   faqTitle(OUTDATED): Perguntas frequentes
 appInfo:
   licenseNotice: |-
+    Note+  Copyright © 2026  Noryx
     Saber  Copyright © 2022-$buildYear  Adil Hanney
     Este programa vem sem absolutamente nenhuma garantia. Este é um software livre e pode redistribuí-lo sob certas condições.
   debug: DEBUG

@@ -1,2 +1,0 @@
-• Şifreleme şifresi sayfasındaki otomatik doldurma desteği düzeltildi.
-• Çeşitli kullanıcı arayüzü iyileştirmeleri.

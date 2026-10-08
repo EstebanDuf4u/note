@@ -1,2 +1,0 @@
-• Verminderde RAM-verbruik door onnodige threads te verminderen
-• Diverse fixes uit afhankelijkheden

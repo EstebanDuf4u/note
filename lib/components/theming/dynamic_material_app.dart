@@ -20,11 +20,14 @@ class DynamicMaterialApp extends StatefulHookWidget {
     super.key,
     required this.title,
     required this.router,
-    this.defaultSwatch = Colors.yellow,
+    this.defaultSwatch = brandColor,
   });
 
   final String title;
   final Color defaultSwatch;
+
+  /// The indigo of the Note+ icon, used unless the user picks another color.
+  static const brandColor = Color(0xFF4F46E5);
   final GoRouter router;
 
   @override
@@ -94,7 +97,7 @@ class DynamicMaterialAppState extends State<DynamicMaterialApp>
     // Use Yaru theme, with or without [chosenAccentColor]
     if (platform == .linux) {
       return YaruBuilder(
-        primary: chosenAccentColor, // if null, falls back to system color
+        primary: chosenAccentColor ?? DynamicMaterialApp.brandColor,
         platform: platform,
         builder: (context, theme) {
           return ExplicitlyThemedApp(

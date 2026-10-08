@@ -1,2 +1,0 @@
-• Reducción del consumo de RAM al disminuir hilos innecesarios
-• Correcciones diversas en dependencias

@@ -1,1 +1,0 @@
-Supporto migliorato sperimentale della stylus su Windows, aggiungendo rilevamento dell'orientamento e dei pulsanti.

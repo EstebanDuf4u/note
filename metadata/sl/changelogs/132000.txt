@@ -1,2 +1,0 @@
-• Povečana natančnost invertacijskega filtra
-• Dodan vietnamski prevod

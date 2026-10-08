@@ -1,1 +1,1 @@
-The notes app built for handwriting
+Handwritten notes that sync in real time across your devices
