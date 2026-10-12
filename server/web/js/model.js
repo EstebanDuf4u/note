@@ -469,6 +469,7 @@ export class Note {
           fit: m.f ?? 1,
           nw: m.nw ?? 0,
           nh: m.nh ?? 0,
+          above: m.ab ?? false,
         };
         if (op.bg) page.backgroundImage = image;
         else page.images.push(image);
@@ -489,6 +490,8 @@ export class Note {
         if (!image) return;
         Object.assign(image, { x: op.x, y: op.y, w: op.w, h: op.h });
         if (op.sw) Object.assign(image, { sx: op.sx, sy: op.sy, sw: op.sw, sh: op.sh });
+        // older clients don't know about it, and leave it as it is
+        if (op.ab !== undefined) image.above = op.ab;
         if (op.bg && page.backgroundImage !== image) {
           if (page.backgroundImage) page.images.push(page.backgroundImage);
           page.images.splice(page.images.indexOf(image), 1);
@@ -603,13 +606,17 @@ export const Ops = {
         w: image.w,
         h: image.h,
         ...(image.nw ? { nw: image.nw, nh: image.nh } : {}),
+        ...(image.above ? { ab: true } : {}),
       },
     });
     return ops;
   },
   removeImages: (images) => ({ t: 'ri', ids: images.map((image) => image.uid) }),
-  /** Where and how `image` is shown, `rect` being its position then. */
-  updateImage: (page, image, rect = image) => ({
+  /**
+   * Where and how `image` is shown, `rect` being its position then and
+   * `above` whether it's in front of the writing.
+   */
+  updateImage: (page, image, rect = image, above = image.above ?? false) => ({
     t: 'ui',
     id: image.uid,
     bg: page.backgroundImage === image,
@@ -623,5 +630,6 @@ export const Ops = {
     sh: image.sh ?? 0,
     v: image.invertible ?? true,
     f: int(image.fit ?? 1),
+    ab: above,
   }),
 };

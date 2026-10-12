@@ -254,6 +254,7 @@ abstract final class NoteOps {
     'sh': image.srcRect.height,
     'v': image.invertible,
     'f': image.backgroundFit.index,
+    'ab': image.above,
   };
 
   /// Describes the whole text of [page], for when a note or a page is shared
@@ -807,6 +808,8 @@ class NoteOpApplier {
       ..invertible = op['v'] as bool? ?? image.invertible
       ..backgroundFit =
           BoxFit.values[opInt(op['f'] ?? image.backgroundFit.index)]
+      // older clients don't send it, and leave it as it is
+      ..above = op['ab'] as bool? ?? image.above
       ..dstRect = .fromLTWH(number('x'), number('y'), number('w'), number('h'));
     final srcRect = Rect.fromLTWH(
       number('sx'),

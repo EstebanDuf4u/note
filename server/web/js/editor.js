@@ -26,6 +26,17 @@ const GAP = 36; // between pages, in page units
 const PAGED_GAP = 120; // between pages side by side
 const MAX_CACHE_PIXELS = 2_800_000; // per page, to stay within iOS's canvas memory
 const HANDLE_RADIUS = 22; // in screen pixels
+const TOUCH_HANDLE_RADIUS = 34; // a fingertip covers more than a pen
+// Holding the pen still on a photo this long picks it up, in milliseconds,
+// as long as it stays within HOLD_SLOP screen pixels.
+const HOLD_DELAY = 450;
+const HOLD_SLOP = 6;
+// A touch wider than this, in screen pixels, is the side of the hand
+// rather than a fingertip.
+const PALM_SIZE = 44;
+// After the pen lifts, the hand is often still moving on the screen, so
+// for this long a new touch is taken to be the hand too, in milliseconds.
+const PEN_GRACE = 500;
 
 const COLORS = [
   0xff000000, 0xff3c3c46, 0xff1e40af, 0xff2563eb, 0xff0e7490, 0xff15803d,
@@ -137,6 +148,8 @@ export class Editor {
    * @param {string} options.name the note's name
    * @param {string} [options.share] the token of its link, if it's another
    *   account's note
+   * @param {boolean} [options.readOnly] whether its link only lets us read
+   *   it, as last known; the server says so again once connected
    * @param {boolean} [options.create] whether it's a new note
    * @param {string} [options.paper] the background of a new note
    * @param {() => void} options.onClose
@@ -154,6 +167,7 @@ export class Editor {
     this.presences = new Map();
     this.lasers = [];
     this.loaded = false;
+    this.readOnly = !!options.readOnly;
 
     this.tool = load('tool', 'fountainPen');
     this.paged = load('paged', false);
@@ -203,14 +217,10 @@ export class Editor {
         )),
         this.undoButton,
         this.redoButton,
-        h(
-          'button.icon-btn.hide-narrow',
-          { onclick: () => this.showPages(), 'aria-label': 'Pages' },
-          icon('pages'),
-        ),
-        h('button.icon-btn', { onclick: () => this.showMenu(), 'aria-label': 'Plus' }, icon('more')),
       ),
     );
+    this.ribbon = h('nav.ribbon', { 'aria-label': "Barre d'outils" });
+    header.append(this.ribbon);
 
     this.dock = h('div.dock');
     this.pagePill = h('button.page-pill', { onclick: () => this.showPages() }, '');
@@ -229,6 +239,7 @@ export class Editor {
     );
     this.root.replaceChildren(this.element);
     this.renderDock();
+    this.renderReadOnly();
     const readDesk = () => {
       this.deskColor = getComputedStyle(this.element).getPropertyValue('--desk').trim() || '#e9e9ef';
       this.requestFrame();
@@ -242,6 +253,12 @@ export class Editor {
     this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
     this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e, true));
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+    // Without this, iPad Safari sometimes takes the pencil or the hand
+    // for a long press or a scroll of its own, and stops sending pointer
+    // events for a while: nothing can be written until the hand lifts.
+    for (const type of ['touchstart', 'touchmove', 'touchend']) {
+      this.canvas.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+    }
     // Safari's own pinch zoom
     this.onGesture = (e) => e.preventDefault();
     document.addEventListener('gesturestart', this.onGesture);
@@ -269,6 +286,10 @@ export class Editor {
   }
 
   renderDock() {
+    if (this.readOnly) {
+      this.dock.replaceChildren(h('div.read-only', {}, icon('eye'), 'Lecture seule'));
+      return;
+    }
     // the pens share a button, to fit on phones
     const penTool = PEN_KINDS.includes(this.tool) ? this.tool : load('lastPen', 'fountainPen');
     const tools = [
@@ -525,6 +546,122 @@ export class Editor {
     );
   }
 
+  /** Stops or allows editing when the owner changes what the link allows. */
+  setReadOnly(readOnly) {
+    if (this.readOnly === readOnly) return;
+    this.readOnly = readOnly;
+    if (readOnly) {
+      if (this.gesture && this.gesture.kind !== 'pan' && this.gesture.kind !== 'pinch') this.cancelGesture();
+      this.clearSelection();
+      this.closePopover();
+      this.undoStack = [];
+      this.redoStack = [];
+      this.updateUndoButtons();
+    }
+    this.renderDock();
+    this.renderReadOnly();
+    if (this.loaded) {
+      toast(readOnly ? 'Ce carnet est maintenant en lecture seule' : 'Vous pouvez maintenant modifier ce carnet');
+    }
+  }
+
+  renderReadOnly() {
+    this.element.classList.toggle('read-only', this.readOnly);
+    this.undoButton.hidden = this.redoButton.hidden = this.readOnly;
+    this.renderRibbon();
+  }
+
+  /**
+   * The tabs below the title, each with a row of buttons: what's added to a
+   * page, what's done to the page, to the whole note, and how it's shown.
+   */
+  ribbonTabs() {
+    const index = this.currentPageIndex;
+    const page = this.note.pages[index];
+    const bookmarked = page?.bookmark !== null && page?.bookmark !== undefined;
+    const edit = !this.readOnly;
+    const item = (iconName, label, action, { active = false, filled = false } = {}) =>
+      h(
+        'button.ribbon-item' + (active ? '.active' : ''),
+        { onclick: () => this.runAction(action), title: label },
+        icon(iconName, { filled }),
+        h('span', {}, label),
+      );
+    return [
+      edit && {
+        id: 'insert',
+        label: 'Insérer',
+        items: [
+          item('photo', 'Photo', 'photo'),
+          item('star', 'Éléments', 'elements'),
+          item('text', 'Texte', 'text'),
+        ],
+      },
+      {
+        id: 'page',
+        label: 'Page',
+        items: [
+          edit && item('plus', 'Nouvelle page', 'add'),
+          edit && item('bookmark', bookmarked ? 'Retirer le signet' : 'Signet', 'bookmark', { active: bookmarked, filled: bookmarked }),
+          edit && item('paper', 'Fond', 'paper'),
+          item('pages', 'Pages et sommaire', 'pages'),
+        ],
+      },
+      {
+        id: 'note',
+        label: 'Carnet',
+        items: [
+          edit && item('cards', 'Fiches de révision', 'flashcards', { active: this.note.flashcards }),
+          this.note.flashcards && item('sparkles', 'Réviser', 'study'),
+          !this.options.share && item('share', 'Partager', 'share'),
+          item('download', 'PDF', 'pdf'),
+        ],
+      },
+      {
+        id: 'view',
+        label: 'Affichage',
+        items: [
+          item('pages', 'Pages une à une', 'paged', { active: this.paged }),
+          item('notebook', 'Ajuster à la largeur', 'fit'),
+        ],
+      },
+    ].filter(Boolean);
+  }
+
+  /** What the ribbon's buttons depend on, to know when to draw it again. */
+  ribbonState() {
+    const page = this.note.pages[this.currentPageIndex];
+    return [this.currentPageIndex, page?.bookmark ?? null, this.note.flashcards, this.paged, this.readOnly].join(':');
+  }
+
+  renderRibbon() {
+    if (!this.ribbon) return;
+    const tabs = this.ribbonTabs();
+    let tab = tabs.find((t) => t.id === load('ribbonTab', 'insert')) ?? tabs[0];
+    this.ribbonKey = this.ribbonState();
+    this.ribbon.replaceChildren(
+      h(
+        'div.ribbon-tabs',
+        { role: 'tablist' },
+        tabs.map((t) =>
+          h(
+            'button.ribbon-tab' + (t === tab ? '.selected' : ''),
+            {
+              role: 'tab',
+              'aria-selected': String(t === tab),
+              onclick: () => {
+                save('ribbonTab', t.id);
+                this.renderRibbon();
+              },
+            },
+            t.label,
+          ),
+        ),
+      ),
+      h('div.ribbon-items', { role: 'tabpanel' }, tab.items.filter(Boolean)),
+    );
+  }
+
   updateUndoButtons() {
     this.undoButton.disabled = !this.undoStack.length;
     this.redoButton.disabled = !this.redoStack.length;
@@ -556,6 +693,7 @@ export class Editor {
       if (!session.hasPending) this.setStatus(session.state);
     });
     session.on('synced', () => this.onSynced());
+    session.on('access', (readOnly) => this.setReadOnly(readOnly));
     session.on('presence', (from, user, presence) => {
       if (presence) this.presences.set(from, { ...presence, user, seen: Date.now() });
       else this.presences.delete(from);
@@ -642,7 +780,7 @@ export class Editor {
    * so that the change can be undone.
    */
   commit(ops, inverse, { undoable = true } = {}) {
-    if (!ops.length) return;
+    if (!ops.length || this.readOnly) return;
     this.session.submit(ops);
     this.savePending();
     if (this.session.state === 'live') this.setStatus('live');
@@ -661,6 +799,7 @@ export class Editor {
   }
 
   undo() {
+    if (this.readOnly) return;
     const change = this.undoStack.pop();
     if (!change) return;
     this.applyLocally(change.inverse);
@@ -671,6 +810,7 @@ export class Editor {
   }
 
   redo() {
+    if (this.readOnly) return;
     const change = this.redoStack.pop();
     if (!change) return;
     this.applyLocally(change.ops);
@@ -1027,6 +1167,8 @@ export class Editor {
     const current = Math.min(this.currentPageIndex + 1, this.note.pages.length);
     this.pagePill.innerHTML = icon('pages');
     this.pagePill.append(`${current} / ${Math.max(pageCount, current)}`);
+    // e.g. the bookmark button follows the page on screen
+    if (this.ribbonKey !== this.ribbonState()) this.renderRibbon();
     this.positionSelectionBar();
   }
 
@@ -1064,18 +1206,20 @@ export class Editor {
     ctx.setLineDash([]);
     ctx.fillStyle = 'rgba(79, 70, 229, 0.06)';
     ctx.fillRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
-    // the handle that resizes the selection
-    ctx.beginPath();
-    ctx.arc(b.right, b.bottom, 10 / z, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-    ctx.lineWidth = 3 / z;
-    ctx.strokeStyle = '#4f46e5';
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(b.right, b.bottom, 4 / z, 0, Math.PI * 2);
-    ctx.fillStyle = '#4f46e5';
-    ctx.fill();
+    // the handles that resize the selection
+    for (const [x, y] of this.handlesOf(b)) {
+      ctx.beginPath();
+      ctx.arc(x, y, 10 / z, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = 3 / z;
+      ctx.strokeStyle = '#4f46e5';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y, 4 / z, 0, Math.PI * 2);
+      ctx.fillStyle = '#4f46e5';
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -1130,13 +1274,20 @@ export class Editor {
     const point = { x: e.offsetX, y: e.offsetY, type: e.pointerType, start: performance.now(), sx: e.offsetX, sy: e.offsetY };
     this.pointers.set(e.pointerId, point);
 
-    if (e.pointerType === 'pen' && !this.penSeen) {
-      this.penSeen = true;
-      save('penSeen', true);
-      this.renderDock();
+    if (e.pointerType === 'pen') {
+      if (!this.penSeen) {
+        this.penSeen = true;
+        save('penSeen', true);
+        this.renderDock();
+      }
+      this.penDown();
+    } else if (e.pointerType === 'touch' && this.isPalm(e)) {
+      // ignored until it lifts, however it moves
+      point.palm = true;
+      return;
     }
 
-    const touches = [...this.pointers.values()].filter((p) => p.type === 'touch');
+    const touches = this.fingers();
     if (e.pointerType === 'touch' && touches.length >= 2) {
       // a second finger: it's a pinch, not a stroke
       if (this.gesture?.byTouch) this.cancelGesture();
@@ -1148,16 +1299,54 @@ export class Editor {
       e.pointerType === 'pen' ||
       (e.pointerType === 'mouse' && e.button === 0) ||
       (e.pointerType === 'touch' && this.fingerDraws && !this.penSeen);
-    if (draws && !this.gesture) {
+    if (draws && !this.gesture && !this.readOnly) {
       this.startTool(e, point);
-    } else if (e.pointerType === 'touch' || e.button === 1 || e.button === 2) {
+    } else if (e.pointerType === 'touch' && !this.gesture && !this.readOnly && this.grabSelection(e, point)) {
+      // with a pen, the finger still moves photos and what the lasso took
+    } else if (this.readOnly || e.pointerType === 'touch' || e.button === 1 || e.button === 2) {
+      // a note that can't be edited is moved around with any pointer
       this.startPan(e.pointerId);
+    }
+  }
+
+  /** Whether the touch `e` is the hand resting on the screen. */
+  isPalm(e) {
+    // while writing, or just after, only the pen counts
+    if ([...this.pointers.values()].some((p) => p.type === 'pen')) return true;
+    if (performance.now() - (this.penUpAt ?? -Infinity) < PEN_GRACE) return true;
+    return (e.width ?? 0) > PALM_SIZE || (e.height ?? 0) > PALM_SIZE;
+  }
+
+  /** The fingers on the screen, without the hand. */
+  fingers() {
+    return [...this.pointers.values()].filter((p) => p.type === 'touch' && !p.palm);
+  }
+
+  /**
+   * The pen goes down: whatever the hand was doing is stopped, and the
+   * hand is ignored until it lifts, so that the pen always writes.
+   */
+  penDown() {
+    for (const p of this.pointers.values()) {
+      if (p.type === 'touch') p.palm = true;
+    }
+    const gesture = this.gesture;
+    if (!gesture) return;
+    if (gesture.kind === 'pan' || gesture.kind === 'pinch' || gesture.kind === 'done') {
+      // no inertia: the page stays where the pen is about to write
+      cancelAnimationFrame(this.inertia);
+      this.gesture = null;
+      this.interacting = false;
+    } else if (gesture.byTouch) {
+      // e.g. the hand drew a line before the pen was known
+      this.cancelGesture();
     }
   }
 
   onPointerMove(e) {
     const point = this.pointers.get(e.pointerId);
-    if (this.tool === 'eraser' && (e.pointerType !== 'touch' || this.gesture?.pointerId === e.pointerId)) {
+    if (point?.palm) return;
+    if (this.tool === 'eraser' && !this.readOnly && (e.pointerType !== 'touch' || this.gesture?.pointerId === e.pointerId)) {
       this.eraserAt = { sx: e.offsetX, sy: e.offsetY };
       this.requestFrame();
     }
@@ -1180,6 +1369,10 @@ export class Editor {
   onPointerUp(e, cancelled = false) {
     const point = this.pointers.get(e.pointerId);
     this.pointers.delete(e.pointerId);
+    if (e.pointerType === 'pen') this.penUpAt = performance.now();
+    if (point?.palm) return;
+    // the hand resting on the screen doesn't keep a gesture going
+    const remaining = [...this.pointers.values()].filter((p) => !p.palm).length;
     if (e.pointerType !== 'touch' && e.pointerType !== 'pen') {
       // a mouse keeps showing the eraser
     } else if (this.eraserAt) {
@@ -1191,7 +1384,7 @@ export class Editor {
     // quick taps with two or three fingers undo and redo
     if (point?.type === 'touch' && gesture?.kind === 'pinch' && !gesture.moved) {
       const elapsed = performance.now() - gesture.start;
-      if (this.pointers.size === 0 && elapsed < 300) {
+      if (remaining === 0 && elapsed < 300) {
         if (gesture.fingers === 2) this.undo();
         if (gesture.fingers >= 3) this.redo();
       }
@@ -1199,7 +1392,7 @@ export class Editor {
 
     if (!gesture) return;
     if (gesture.kind === 'pinch') {
-      if (this.pointers.size === 0) {
+      if (remaining === 0) {
         this.gesture = null;
         this.interacting = false;
         if (this.paged) {
@@ -1207,7 +1400,7 @@ export class Editor {
           this.snapToPage(recent ? (gesture.velocity ?? 0) : 0);
         }
         this.requestFrame();
-      } else if (this.pointers.size === 1 && gesture.moved) {
+      } else if (remaining === 1 && gesture.moved) {
         this.gesture = null;
         this.interacting = false;
         if (this.paged) {
@@ -1217,22 +1410,35 @@ export class Editor {
           this.gesture = { kind: 'done' };
         } else {
           // the finger left on the screen carries on scrolling
-          this.startPan([...this.pointers.keys()][0]);
+          this.startPan([...this.pointers].find(([, p]) => !p.palm)[0]);
         }
       }
       // otherwise it may still be a tap with several fingers
       return;
     }
     if (gesture.kind === 'pan') {
-      if (gesture.pointerId === e.pointerId) this.endPan();
+      if (gesture.pointerId !== e.pointerId) return;
+      this.endPan();
+      // a note that can't be edited can still be quizzed with its tape
+      if (this.readOnly && point && Math.hypot(point.x - point.sx, point.y - point.sy) < 4) {
+        const hit = this.pageAt(point.sx, point.sy);
+        const tape = hit && tapeAt(hit.page.strokes, hit.x, hit.y);
+        if (tape) {
+          tape.revealed = !tape.revealed;
+          hit.page.changed();
+          this.requestFrame();
+        }
+      }
       return;
     }
     if (gesture.kind === 'done') {
-      if (this.pointers.size === 0) this.gesture = null;
+      if (remaining === 0) this.gesture = null;
       return;
     }
     if (gesture.pointerId !== e.pointerId) return;
-    if (cancelled) this.cancelGesture();
+    // Safari cancels the pen when it thinks the hand is a gesture of its
+    // own: what was written so far is kept rather than lost.
+    if (cancelled && gesture.kind !== 'stroke') this.cancelGesture();
     else this.endTool(e);
   }
 
@@ -1255,7 +1461,7 @@ export class Editor {
   }
 
   onKeyDown(e) {
-    if (e.target.closest?.('input, textarea')) return;
+    if (e.target.closest?.('input, textarea') || this.readOnly) return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault();
@@ -1329,7 +1535,7 @@ export class Editor {
 
   startPinch() {
     cancelAnimationFrame(this.inertia);
-    const touches = [...this.pointers.values()].filter((p) => p.type === 'touch');
+    const touches = this.fingers();
     const [a, b] = touches;
     const center = [(a.x + b.x) / 2, (a.y + b.y) / 2];
     this.gesture = {
@@ -1347,7 +1553,7 @@ export class Editor {
 
   movePinch() {
     const gesture = this.gesture;
-    const touches = [...this.pointers.values()].filter((p) => p.type === 'touch');
+    const touches = this.fingers();
     if (touches.length < 2) return;
     gesture.fingers = Math.max(gesture.fingers, touches.length);
     const [a, b] = touches;
@@ -1376,6 +1582,7 @@ export class Editor {
     const gesture = this.gesture;
     this.gesture = null;
     if (!gesture) return;
+    clearTimeout(gesture.hold);
     if (gesture.kind === 'stroke') {
       this.current = null;
     } else if (gesture.kind === 'erase') {
@@ -1394,52 +1601,82 @@ export class Editor {
     this.requestFrame();
   }
 
+  /**
+   * Starts moving or resizing what's selected, or picks up a photo if
+   * `pickImage`, if `point` is on one. Returns whether it did.
+   */
+  grabSelection(e, point, pickImage = this.tool === 'lasso') {
+    const byTouch = e.pointerType === 'touch';
+    if (this.selection) {
+      const b = this.selection.bounds;
+      const [left, top] = this.pageOrigin(this.selection.page);
+      const [wx, wy] = this.toWorld(point.x, point.y);
+      const x = wx - left;
+      const y = wy - top;
+      // any corner resizes, the opposite one staying where it is
+      const radius = byTouch ? TOUCH_HANDLE_RADIUS : HANDLE_RADIUS;
+      const corner = this.handlesOf(b).find(([cx, cy]) => Math.hypot(x - cx, y - cy) * this.camera.z <= radius);
+      if (corner) {
+        const anchor = [corner[0] === b.left ? b.right : b.left, corner[1] === b.top ? b.bottom : b.top];
+        this.gesture = {
+          kind: 'resize', pointerId: e.pointerId, byTouch, anchor, start: [corner[0], corner[1]], factor: 1,
+          rects: this.selection.images.map((image) => ({ x: image.x, y: image.y, w: image.w, h: image.h })),
+        };
+        this.hideSelectionBar();
+        return true;
+      }
+      const margin = 8 / this.camera.z;
+      if (x >= b.left - margin && x <= b.right + margin && y >= b.top - margin && y <= b.bottom + margin) {
+        this.gesture = {
+          kind: 'move', pointerId: e.pointerId, byTouch, last: [x, y], dx: 0, dy: 0,
+          rects: this.selection.images.map((image) => ({ x: image.x, y: image.y, w: image.w, h: image.h })),
+        };
+        this.moving = true;
+        this.hideSelectionBar();
+        return true;
+      }
+    }
+    if (!pickImage) return false;
+    // a photo is picked up directly
+    const hit = this.pageAt(point.x, point.y);
+    const image = hit && imageAt(hit.page.images, hit.x, hit.y);
+    if (!image) return false;
+    this.select(hit.page, [], [image]);
+    this.gesture = {
+      kind: 'move', pointerId: e.pointerId, byTouch, last: [hit.x, hit.y], dx: 0, dy: 0,
+      rects: [{ x: image.x, y: image.y, w: image.w, h: image.h }],
+    };
+    this.moving = true;
+    this.hideSelectionBar();
+    return true;
+  }
+
+  /** The corners of the box `b` that resize the selection. */
+  handlesOf(b) {
+    return [
+      [b.left, b.top],
+      [b.right, b.top],
+      [b.left, b.bottom],
+      [b.right, b.bottom],
+    ];
+  }
+
   startTool(e, point) {
     const hit = this.pageAt(point.x, point.y);
     const byTouch = e.pointerType === 'touch';
 
     if (this.tool === 'lasso') {
-      if (this.selection) {
-        const b = this.selection.bounds;
-        const [left, top] = this.pageOrigin(this.selection.page);
-        const [wx, wy] = this.toWorld(point.x, point.y);
-        const x = wx - left;
-        const y = wy - top;
-        const handleDistance = Math.hypot(x - b.right, y - b.bottom) * this.camera.z;
-        if (handleDistance <= HANDLE_RADIUS) {
-          this.gesture = {
-            kind: 'resize', pointerId: e.pointerId, byTouch, anchor: [b.left, b.top], start: [b.right, b.bottom], factor: 1,
-            rects: this.selection.images.map((image) => ({ x: image.x, y: image.y, w: image.w, h: image.h })),
-          };
-          this.hideSelectionBar();
-          return;
-        }
-        if (x >= b.left - 8 && x <= b.right + 8 && y >= b.top - 8 && y <= b.bottom + 8) {
-          this.gesture = {
-            kind: 'move', pointerId: e.pointerId, byTouch, last: [x, y], dx: 0, dy: 0,
-            rects: this.selection.images.map((image) => ({ x: image.x, y: image.y, w: image.w, h: image.h })),
-          };
-          this.moving = true;
-          this.hideSelectionBar();
-          return;
-        }
-      }
+      if (this.grabSelection(e, point)) return;
       this.clearSelection();
       if (!hit) return;
-      // a photo is picked up directly
-      const image = imageAt(hit.page.images, hit.x, hit.y);
-      if (image) {
-        this.select(hit.page, [], [image]);
-        this.gesture = {
-          kind: 'move', pointerId: e.pointerId, byTouch, last: [hit.x, hit.y], dx: 0, dy: 0,
-          rects: [{ x: image.x, y: image.y, w: image.w, h: image.h }],
-        };
-        this.moving = true;
-        this.hideSelectionBar();
-        return;
-      }
       this.lasso = { page: hit.page, points: [[hit.x, hit.y]] };
       this.gesture = { kind: 'lasso', pointerId: e.pointerId, byTouch };
+      return;
+    }
+
+    if (this.selection) {
+      // touching elsewhere only lets go of it, without a stray dot
+      if (!this.grabSelection(e, point)) this.clearSelection();
       return;
     }
 
@@ -1486,7 +1723,14 @@ export class Editor {
       points: [this.strokePoint(hit.x, hit.y, e, pressure)],
     });
     this.current = { page: hit.page, stroke, pressure };
-    this.gesture = { kind: 'stroke', pointerId: e.pointerId, byTouch, page: hit.page };
+    const gesture = { kind: 'stroke', pointerId: e.pointerId, byTouch, page: hit.page };
+    this.gesture = gesture;
+    // holding still on a photo picks it up instead of writing
+    const image = imageAt(hit.page.images, hit.x, hit.y);
+    if (image) {
+      gesture.holdFrom = [point.x, point.y];
+      gesture.hold = setTimeout(() => this.pickUpHeld(gesture, image), HOLD_DELAY);
+    }
     this.sendPresence(hit.page, hit.x, hit.y, true);
     this.requestFrame();
   }
@@ -1502,10 +1746,34 @@ export class Editor {
     return [wx - left, wy - top];
   }
 
+  /** The pen held still on `image` while writing picks it up. */
+  pickUpHeld(gesture, image) {
+    if (this.gesture !== gesture) return;
+    const page = gesture.page;
+    const pointer = this.pointers.get(gesture.pointerId);
+    if (!pointer || !page.images.includes(image)) return;
+    // the dot written so far is dropped
+    this.current = null;
+    const [x, y] = this.pointOn(page, { offsetX: pointer.x, offsetY: pointer.y });
+    this.select(page, [], [image]);
+    this.gesture = {
+      kind: 'move', pointerId: gesture.pointerId, byTouch: gesture.byTouch, last: [x, y], dx: 0, dy: 0,
+      rects: [{ x: image.x, y: image.y, w: image.w, h: image.h }],
+    };
+    this.moving = true;
+    this.hideSelectionBar();
+    this.requestFrame();
+  }
+
   moveTool(e) {
     const gesture = this.gesture;
     switch (gesture.kind) {
       case 'stroke': {
+        if (gesture.hold && Math.hypot(e.offsetX - gesture.holdFrom[0], e.offsetY - gesture.holdFrom[1]) > HOLD_SLOP) {
+          // it's writing on the photo
+          clearTimeout(gesture.hold);
+          gesture.hold = null;
+        }
         const { page, stroke, pressure } = this.current;
         const [x, y] = this.pointOn(page, e);
         const last = stroke.points[stroke.points.length - 1];
@@ -1586,6 +1854,7 @@ export class Editor {
   endTool(e) {
     const gesture = this.gesture;
     this.gesture = null;
+    clearTimeout(gesture?.hold);
     switch (gesture?.kind) {
       case 'stroke': {
         const { page, stroke } = this.current;
@@ -1755,6 +2024,7 @@ export class Editor {
       this.selection?.strokes.length
         ? h('button', { onclick: () => this.recolorSelection(), title: 'Couleur', 'aria-label': 'Couleur' }, icon('palette'), h('span.label', {}, 'Couleur'))
         : null,
+      this.selection?.images.length ? this.layerButton() : null,
       h('button', { onclick: () => this.duplicateSelection(), title: 'Dupliquer', 'aria-label': 'Dupliquer' }, icon('copy'), h('span.label', {}, 'Dupliquer')),
       this.selection?.strokes.length
         ? h('button', { onclick: () => this.saveElement(), title: 'Élément', 'aria-label': 'Élément' }, icon('star'), h('span.label', {}, 'Élément'))
@@ -1832,6 +2102,30 @@ export class Editor {
     this.select(page, copies, imageCopies);
   }
 
+  /** The button that puts the selected photos in front of the writing, or behind it. */
+  layerButton() {
+    const above = this.selection.images.every((image) => image.above);
+    const label = above ? "Derrière l'écriture" : "Devant l'écriture";
+    return h(
+      'button',
+      { onclick: () => this.setImagesAbove(!above), title: label, 'aria-label': label },
+      icon(above ? 'sendBack' : 'bringFront'),
+      h('span.label', {}, label),
+    );
+  }
+
+  setImagesAbove(above) {
+    if (!this.selection) return;
+    const { page, images } = this.selection;
+    const before = images.map((image) => Ops.updateImage(page, image));
+    for (const image of images) image.above = above;
+    page.changed();
+    this.commit(images.map((image) => Ops.updateImage(page, image)), before);
+    this.showSelectionBar();
+    this.requestFrame();
+    toast(above ? "La photo passe devant l'écriture" : "La photo passe derrière l'écriture");
+  }
+
   async recolorSelection() {
     const color = await sheet((close) => [
       h('h2', {}, 'Couleur'),
@@ -1889,45 +2183,9 @@ export class Editor {
     this.requestFrame();
   }
 
-  async showMenu() {
+  /** Does what a button of the ribbon is for. */
+  async runAction(choice) {
     const index = this.currentPageIndex;
-    const page = this.note.pages[index];
-    const bookmarked = page?.bookmark !== null && page?.bookmark !== undefined;
-    const choice = await sheet((close) => [
-      h('h2', {}, this.options.name),
-      h(
-        'div.menu',
-        {},
-        h('button', { onclick: () => close('photo') }, icon('photo'), 'Ajouter une photo'),
-        h('button', { onclick: () => close('elements') }, icon('star'), 'Éléments'),
-        h('button', { onclick: () => close('text') }, icon('text'), 'Texte de la page'),
-        h('button', { onclick: () => close('pages') }, icon('pages'), 'Pages et sommaire'),
-        h('button', { onclick: () => close('add') }, icon('plus'), 'Ajouter une page', h('span.hint', {}, `après la ${index + 1}`)),
-        h('button', { onclick: () => close('bookmark') }, icon('bookmark', { filled: bookmarked }), bookmarked ? 'Retirer le signet' : 'Ajouter un signet'),
-        h('button', { onclick: () => close('paper') }, icon('paper'), 'Fond de page'),
-        h(
-          'button',
-          { onclick: () => close('flashcards') },
-          icon('cards'),
-          'Fiches de révision',
-          h('span.hint', {}, this.note.flashcards ? 'activé' : 'désactivé'),
-        ),
-        this.note.flashcards
-          ? h('button', { onclick: () => close('study') }, icon('sparkles'), 'Réviser')
-          : null,
-        this.options.share
-          ? null
-          : h('button', { onclick: () => close('share') }, icon('share'), 'Partager'),
-        h(
-          'button',
-          { onclick: () => close('paged') },
-          icon('pages'),
-          this.paged ? 'Faire défiler les pages' : 'Tourner les pages une à une',
-        ),
-        h('button', { onclick: () => close('pdf') }, icon('download'), 'Exporter en PDF'),
-        h('button', { onclick: () => close('fit') }, icon('notebook'), 'Ajuster à la largeur'),
-      ),
-    ]);
     if (choice === 'photo') this.pickPhoto();
     if (choice === 'elements') this.showElements();
     if (choice === 'text') this.editText(index);
@@ -1941,7 +2199,8 @@ export class Editor {
     if (choice === 'study') this.study();
     if (choice === 'share') copyShareLink(this.options.path);
     if (choice === 'fit') this.fitWidth();
-
+    // e.g. a bookmark was added
+    this.renderRibbon();
   }
 
   /** Lets the user add a photo, from the camera or their library. */
@@ -2013,8 +2272,9 @@ export class Editor {
     page.changed();
     this.note.ensureBlankLastPage();
     this.commit(Ops.addImage(page, image), [Ops.removeImages([image])]);
-    this.setTool('lasso');
+    // it can be placed right away, whatever the tool
     this.select(page, [], [image]);
+    this.showSelectionBar();
     toast('Photo ajoutée · glissez-la pour la placer');
   }
 
@@ -2166,6 +2426,7 @@ export class Editor {
   /** The study button is shown while the note is in flashcards mode. */
   renderHeaderActions() {
     this.studyButton.hidden = !this.note.flashcards;
+    this.renderRibbon();
   }
 
   async showPapers() {
@@ -2234,7 +2495,7 @@ export class Editor {
                 {},
                 bookmarked ? h('span.bookmark', {}, icon('bookmark', { filled: true })) : null,
                 String(index + 1),
-                isBlankLast
+                isBlankLast || this.readOnly
                   ? null
                   : h(
                       'button.thumb-more',
@@ -2244,12 +2505,14 @@ export class Editor {
               ),
             );
           }),
-          h(
-            'button.page-thumb.add',
-            { onclick: () => close({ add: true }) },
-            h('div.blank', {}, icon('plus')),
-            'Ajouter',
-          ),
+          this.readOnly
+            ? null
+            : h(
+                'button.page-thumb.add',
+                { onclick: () => close({ add: true }) },
+                h('div.blank', {}, icon('plus')),
+                'Ajouter',
+              ),
         ),
       ];
     });

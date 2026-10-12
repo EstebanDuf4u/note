@@ -206,7 +206,7 @@ class PdfEditorImage extends EditorImage {
     dstRect: dstRect,
     naturalSize: naturalSize,
     isThumbnail: isThumbnail,
-  );
+  )..above = above;
 
   @override
   void dispose() {

@@ -243,7 +243,11 @@ class _Translations$sharing$fr extends Translations$sharing$en {
 
 	// Translations
 	@override String get title => 'Partager';
-	@override String get description => 'Toute personne qui a le lien peut ouvrir cette note et y écrire avec vous, en direct. Il lui faut un compte sur votre serveur.';
+	@override String get description => 'Toute personne qui a le lien peut ouvrir cette note, en direct. Il lui faut un compte sur votre serveur.';
+	@override String get access => 'Les personnes qui ont le lien';
+	@override String get canEdit => 'Peuvent modifier';
+	@override String get canRead => 'Peuvent seulement lire';
+	@override String sharedByReadOnly({required Object owner}) => 'Partagée avec vous par ${owner}, en lecture seule';
 	@override String get createLink => 'Créer un lien';
 	@override String get copy => 'Copier le lien';
 	@override String get copied => 'Lien copié';
@@ -952,6 +956,8 @@ class _Translations$editor$imageOptions$fr extends Translations$editor$imageOpti
 	@override String get download => 'Télécharger';
 	@override String get setAsBackground => 'Utiliser comme fond';
 	@override String get removeAsBackground => 'Supprimer de l\'arrière-plan';
+	@override String get bringAboveWriting => 'Devant l\'écriture';
+	@override String get sendBehindWriting => 'Derrière l\'écriture';
 	@override String get delete => 'Effacer';
 }
 
@@ -1001,6 +1007,7 @@ class _Translations$editor$readOnlyBanner$fr extends Translations$editor$readOnl
 	@override String get title => 'Mode lecture seule';
 	@override String get watchingServer => 'Vous visualisez actuellement les mises à jour sur le serveur. L\'édition est désactivée dans ce mode.';
 	@override String get corrupted => 'Le chargement de la note a échoué. Il peut être corrompu ou encore en cours de téléchargement.';
+	@override String get sharedReadOnly => 'Cette note vous est partagée en lecture seule. Vous voyez en direct les changements des autres.';
 }
 
 // Path: editor.versionTooNew

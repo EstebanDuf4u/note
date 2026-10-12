@@ -247,5 +247,5 @@ class PngEditorImage extends EditorImage {
     naturalSize: naturalSize,
     thumbnailBytes: thumbnailBytes,
     isThumbnail: isThumbnail,
-  );
+  )..above = above;
 }

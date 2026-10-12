@@ -305,7 +305,11 @@ elements:
   empty: Select handwriting with the lasso and save it as an element to add it again to any note.
 sharing:
   title: Share
-  description: Anyone with the link can open this note and write in it with you, as it happens. They need an account on your server.
+  description: Anyone who has the link can open this note, live. They need an account on your server.
+  access: Those who have the link
+  canEdit: Can edit
+  canRead: Can read only
+  sharedByReadOnly: Shared with you by $owner, to read only
   createLink: Create a link
   copy: Copy the link
   copied: Link copied
@@ -429,6 +433,8 @@ editor:
     download: Download
     setAsBackground: Set as background
     removeAsBackground: Remove as background
+    bringAboveWriting: In front of the writing
+    sendBehindWriting: Behind the writing
     delete: Delete
   selectionBar:
     delete: Delete
@@ -466,6 +472,7 @@ editor:
     title: Read-only mode
     watchingServer: You are currently watching for updates on the server. Editing is disabled in this mode.
     corrupted: Failed to load note. It may be corrupted or still being downloaded.
+    sharedReadOnly: This note was shared with you to read only. You see the changes of the others live.
   versionTooNew:
     title: This note was edited using a newer version of Note+
     subtitle: Editing this note may result in some information being lost. Do you want to ignore this and edit it anyway?

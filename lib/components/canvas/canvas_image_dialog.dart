@@ -43,6 +43,12 @@ class _CanvasImageDialogState extends State<CanvasImageDialog> {
     widget.redrawImage();
   });
 
+  void toggleAbove() => setState(() {
+    widget.image.above = !widget.image.above;
+    widget.image.onMiscChange?.call();
+    widget.redrawImage();
+  });
+
   @override
   Widget build(BuildContext context) {
     final platform = Theme.of(context).platform;
@@ -122,6 +128,22 @@ class _CanvasImageDialogState extends State<CanvasImageDialog> {
           cupertinoIcon: CupertinoIcons.arrow_down_circle_fill,
         ),
       ),
+      if (!widget.isBackground)
+        _CanvasImageDialogItem(
+          onTap: () {
+            toggleAbove();
+            Navigator.of(context).pop();
+          },
+          title: widget.image.above
+              ? t.editor.imageOptions.sendBehindWriting
+              : t.editor.imageOptions.bringAboveWriting,
+          child: AdaptiveIcon(
+            icon: widget.image.above ? Icons.flip_to_back : Icons.flip_to_front,
+            cupertinoIcon: widget.image.above
+                ? CupertinoIcons.square_stack_3d_down_right
+                : CupertinoIcons.square_stack_3d_up_fill,
+          ),
+        ),
       _CanvasImageDialogItem(
         onTap: () {
           widget.toggleAsBackground?.call();

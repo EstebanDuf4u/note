@@ -38,7 +38,7 @@ const ops = [
   Ops.scaleStrokes([pen], 10, 20, 2),
   Ops.bookmark(page),
   ...Ops.addImage(page, image),
-  Ops.updateImage(page, { ...image, x: 120 }),
+  Ops.updateImage(page, { ...image, x: 120, above: true }),
   Ops.flashcards(true),
   Ops.study(page),
 ];

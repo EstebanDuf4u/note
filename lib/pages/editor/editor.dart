@@ -311,15 +311,23 @@ class EditorState extends State<Editor> {
 
     await RealtimeAccount.waitUntilLoaded();
     if (!mounted) return;
-    if (!RealtimeAccount.isSignedIn || coreInfo.readOnly) return;
+    if (!RealtimeAccount.isSignedIn) return;
+    final sharedNote = SharedNotes.at(coreInfo.filePath);
+    if (sharedNote != null && sharedNote.readOnly) {
+      _setSharedReadOnly(true);
+    }
+    if (coreInfo.readOnly && coreInfo.readOnlyReason != .sharedReadOnly) {
+      return;
+    }
 
     final token = stows.realtimeToken.value;
     _presences.value = {};
-    _realtime = RealtimeSession(
+    final realtime = _realtime = RealtimeSession(
       serverUrl: RealtimeAccount.webSocketUrl,
       token: token,
       room: coreInfo.filePath,
-      share: SharedNotes.tokenAt(coreInfo.filePath),
+      share: sharedNote?.token,
+      readOnly: sharedNote?.readOnly ?? false,
       onPresence: _onPresence,
       clientId: stows.realtimeClientId.value,
       applier: NoteOpApplier(
@@ -346,7 +354,28 @@ class EditorState extends State<Editor> {
       onStopped: (reason) {
         if (reason == .unauthorized) RealtimeAccount.sessionEnded(token);
       },
-    )..start();
+    );
+    if (sharedNote != null) {
+      realtime.readOnly.addListener(() {
+        SharedNotes.setReadOnly(sharedNote.token, realtime.readOnly.value);
+        if (mounted) _setSharedReadOnly(realtime.readOnly.value);
+      });
+    }
+    realtime.start();
+    setState(() {});
+  }
+
+  /// Stops or allows editing when the owner of this shared note
+  /// changes what its link lets the user do.
+  void _setSharedReadOnly(bool readOnly) {
+    final reason = coreInfo.readOnlyReason;
+    if (readOnly && reason == null) {
+      coreInfo.readOnlyReason = .sharedReadOnly;
+    } else if (!readOnly && reason == .sharedReadOnly) {
+      coreInfo.readOnlyReason = null;
+    } else {
+      return;
+    }
     setState(() {});
   }
 
@@ -490,6 +519,8 @@ class EditorState extends State<Editor> {
       ..onMiscChange = () {
         _submitImageUpdate(image);
         autosaveAfterDelay();
+        // e.g. the image went in front of the writing
+        setState(() {});
       };
   }
 
@@ -1461,7 +1492,10 @@ class EditorState extends State<Editor> {
   }
 
   Future<void> saveToFile() async {
-    if (coreInfo.readOnly) return;
+    // a note shared to read only still gets the others' changes
+    if (coreInfo.readOnly && coreInfo.readOnlyReason != .sharedReadOnly) {
+      return;
+    }
     _noteTextChanges();
 
     switch (savingState.value) {

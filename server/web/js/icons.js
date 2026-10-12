@@ -23,9 +23,12 @@ const paths = {
   pages: '<rect x="8" y="2" width="13" height="16" rx="2"/><path d="M16 22H5a2 2 0 0 1-2-2V7"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
   bookmark: '<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   share:
     '<circle cx="9" cy="7" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/><path d="M19 8v6"/><path d="M16 11h6"/>',
   trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+  bringFront: '<rect x="3" y="10" width="11" height="11" rx="2"/><path d="M18 14V4"/><path d="M14.5 7.5L18 4l3.5 3.5"/>',
+  sendBack: '<rect x="3" y="3" width="11" height="11" rx="2"/><path d="M18 10v10"/><path d="M14.5 16.5L18 20l3.5-3.5"/>',
   copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
