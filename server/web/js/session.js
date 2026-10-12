@@ -23,11 +23,13 @@ export class Session {
     this.pending = new Map();
     this.state = 'offline'; // or 'catchingUp', 'live'
     this.stopped = null; // why it gave up: 'deleted' or 'unauthorized'
+    /** Whether the link of another account's note only lets us read it. */
+    this.readOnly = false;
     this.reconnectDelay = 1000;
     this.listeners = {};
   }
 
-  /** Calls `listener` on `event`: op, state, presence, stopped, synced. */
+  /** Calls `listener` on `event`: op, state, presence, stopped, synced, access. */
   on(event, listener) {
     (this.listeners[event] ??= []).push(listener);
     return this;
@@ -105,6 +107,7 @@ export class Session {
         this.emit('ack');
         break;
       case 'synced':
+        this.setReadOnly(!!message.readOnly);
         if (message.head > this.seq) this.seq = message.head;
         this.setState('live');
         this.reconnectDelay = 1000;
@@ -112,6 +115,15 @@ export class Session {
           this.send({ k: 'op', cid: int(cid), d: op });
         }
         this.emit('synced');
+        break;
+      case 'access':
+        // the note's owner changed what its link allows
+        this.setReadOnly(!!message.readOnly);
+        break;
+      case 'refused':
+        // e.g. made offline before the link became read-only
+        this.pending.delete(message.cid);
+        this.emit('ack');
         break;
       case 'presence':
         this.emit('presence', message.from, message.user, message.d);
@@ -126,8 +138,17 @@ export class Session {
     }
   }
 
+  setReadOnly(readOnly) {
+    // what can't be sent anymore would be refused
+    if (readOnly) this.pending.clear();
+    if (this.readOnly === readOnly) return;
+    this.readOnly = readOnly;
+    this.emit('access', readOnly);
+  }
+
   /** Sends `ops` now, or once reconnected. */
   submit(ops) {
+    if (this.readOnly) return;
     for (const op of ops) {
       const cid = newOpId();
       this.pending.set(cid, op);

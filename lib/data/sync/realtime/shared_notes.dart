@@ -10,6 +10,7 @@ class SharedNote {
     required this.owner,
     required this.ownerPath,
     required this.localPath,
+    this.readOnly = false,
     this.left = false,
   });
 
@@ -18,6 +19,7 @@ class SharedNote {
     owner: json['owner'] as String? ?? '',
     ownerPath: json['path'] as String? ?? '',
     localPath: json['local'] as String,
+    readOnly: json['readOnly'] == true,
     left: json['left'] == true,
   );
 
@@ -33,6 +35,10 @@ class SharedNote {
   /// Where the note is in this device's library, without its extension.
   final String localPath;
 
+  /// Whether the note's link only lets the user read it,
+  /// as last heard from the server.
+  final bool readOnly;
+
   /// Whether the user removed the note, but the server hasn't been told yet.
   final bool left;
 
@@ -40,16 +46,19 @@ class SharedNote {
     'owner': owner,
     'path': ownerPath,
     'local': localPath,
+    if (readOnly) 'readOnly': true,
     if (left) 'left': true,
   };
 
-  SharedNote copyWith({String? localPath, bool? left}) => SharedNote(
-    token: token,
-    owner: owner,
-    ownerPath: ownerPath,
-    localPath: localPath ?? this.localPath,
-    left: left ?? this.left,
-  );
+  SharedNote copyWith({String? localPath, bool? readOnly, bool? left}) =>
+      SharedNote(
+        token: token,
+        owner: owner,
+        ownerPath: ownerPath,
+        localPath: localPath ?? this.localPath,
+        readOnly: readOnly ?? this.readOnly,
+        left: left ?? this.left,
+      );
 }
 
 /// The notes of other accounts that the user opened from their links.
@@ -98,10 +107,16 @@ abstract final class SharedNotes {
     required String token,
     required String owner,
     required String ownerPath,
+    required bool readOnly,
     required bool Function(String path) isTaken,
   }) {
     final notes = all;
-    if (notes[token] case final existing? when !existing.left) return existing;
+    if (notes[token] case final existing? when !existing.left) {
+      if (existing.readOnly == readOnly) return existing;
+      final updated = notes[token] = existing.copyWith(readOnly: readOnly);
+      _save(notes);
+      return updated;
+    }
 
     final name = ownerPath.substring(ownerPath.lastIndexOf('/') + 1);
     final base = '$folder/$name ($owner)';
@@ -114,6 +129,7 @@ abstract final class SharedNotes {
       owner: owner,
       ownerPath: ownerPath,
       localPath: localPath,
+      readOnly: readOnly,
     );
     notes[token] = note;
     _save(notes);
@@ -127,6 +143,15 @@ abstract final class SharedNotes {
   static void remove(String token) {
     final notes = all;
     if (notes.remove(token) != null) _save(notes);
+  }
+
+  /// Takes note of whether the link [token] only lets the user read its note.
+  static void setReadOnly(String token, bool readOnly) {
+    final notes = all;
+    final note = notes[token];
+    if (note == null || note.readOnly == readOnly) return;
+    notes[token] = note.copyWith(readOnly: readOnly);
+    _save(notes);
   }
 
   /// Takes note that the user removed the shared note at [localPath],
