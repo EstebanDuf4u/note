@@ -22,6 +22,7 @@ class ShareDialog extends StatefulWidget {
 
 class _ShareDialogState extends State<ShareDialog> {
   String? _link;
+  var _readOnly = false;
   String? _error;
   var _busy = false;
 
@@ -43,9 +44,14 @@ class _ShareDialogState extends State<ShareDialog> {
     }
   }
 
-  Future<void> _share() => _run(() async {
-    final token = await RealtimeAccount.shareNote(widget.path);
-    _link = SharedNotes.linkOf(token);
+  /// Creates the link, or changes its mode once it's created.
+  Future<void> _share({bool? readOnly}) => _run(() async {
+    final share = await RealtimeAccount.shareNote(
+      widget.path,
+      readOnly: readOnly,
+    );
+    _link = SharedNotes.linkOf(share.token);
+    _readOnly = share.readOnly;
   });
 
   Future<void> _unshare() => _run(() async {
@@ -70,9 +76,34 @@ class _ShareDialogState extends State<ShareDialog> {
           spacing: 12,
           children: [
             if (sharedNote != null)
-              Text(t.sharing.sharedBy(owner: sharedNote.owner))
+              Text(
+                sharedNote.readOnly
+                    ? t.sharing.sharedByReadOnly(owner: sharedNote.owner)
+                    : t.sharing.sharedBy(owner: sharedNote.owner),
+              )
             else ...[
               Text(t.sharing.description, style: textTheme.bodyMedium),
+              if (_link != null) ...[
+                Text(t.sharing.access, style: textTheme.labelLarge),
+                SegmentedButton<bool>(
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      icon: const Icon(Icons.edit),
+                      label: Text(t.sharing.canEdit),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      icon: const Icon(Icons.visibility),
+                      label: Text(t.sharing.canRead),
+                    ),
+                  ],
+                  selected: {_readOnly},
+                  onSelectionChanged: _busy
+                      ? null
+                      : (selected) => _share(readOnly: selected.single),
+                ),
+              ],
               if (_link case final link?)
                 Container(
                   padding: const .only(left: 12),

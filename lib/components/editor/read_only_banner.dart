@@ -31,6 +31,7 @@ class _ReadOnlyBannerState extends State<ReadOnlyBanner> {
     .versionTooNew => t.editor.versionTooNew.title,
     .watchingServer => t.editor.readOnlyBanner.watchingServer,
     .corrupted => t.editor.readOnlyBanner.corrupted,
+    .sharedReadOnly => t.editor.readOnlyBanner.sharedReadOnly,
   };
 
   @override

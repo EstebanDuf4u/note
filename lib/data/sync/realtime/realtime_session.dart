@@ -47,10 +47,11 @@ class RealtimeSession {
     required this.onLocalStateChange,
     this.onStopped,
     this.share,
+    bool readOnly = false,
     this.onPresence,
     this.minReconnectDelay = const Duration(seconds: 1),
     this.maxReconnectDelay = const Duration(seconds: 30),
-  });
+  }) : readOnly = ValueNotifier(readOnly);
 
   static final log = Logger('RealtimeSession');
 
@@ -70,6 +71,10 @@ class RealtimeSession {
   /// The token of the link that the note was opened with,
   /// if it's another account's note. [room] is then ignored by the server.
   final String? share;
+
+  /// Whether [share] only lets this device read the note, in which case
+  /// the server refuses its changes. Its owner can change this at any time.
+  final ValueNotifier<bool> readOnly;
 
   /// Called when another device says where its user is in the note,
   /// with null [presence] when it leaves.
@@ -123,6 +128,10 @@ class RealtimeSession {
   /// Queues [ops] to be sent to the other devices.
   void submit(List<NoteOp> ops) {
     if (ops.isEmpty) return;
+    if (readOnly.value) {
+      log.warning('Not sending ${ops.length} ops: the note is read-only');
+      return;
+    }
 
     // A note that has never been synced is sent as a whole when we first
     // catch up, so we don't need to track its individual changes until then.
@@ -310,7 +319,15 @@ class RealtimeSession {
         _removePending(opInt(message['cid']));
         onLocalStateChange();
       case 'synced':
+        _setReadOnly(message['readOnly'] == true);
         _onSynced(opInt(message['head']));
+      case 'access':
+        _setReadOnly(message['readOnly'] == true);
+      case 'refused':
+        // e.g. made offline before the link became read-only
+        log.warning('The server refused op ${message['cid']}');
+        _removePending(opInt(message['cid']));
+        onLocalStateChange();
       case 'presence':
         onPresence?.call(
           message['from'] as String? ?? '',
@@ -402,6 +419,17 @@ class RealtimeSession {
     applier.applyTextChange(pageId, remote);
   }
 
+  void _setReadOnly(bool value) {
+    readOnly.value = value;
+    if (value && coreInfo.pendingOps.isNotEmpty) {
+      // they would be refused
+      log.warning(
+        'Dropping ${coreInfo.pendingOps.length} ops: the note is read-only',
+      );
+      coreInfo.pendingOps.clear();
+    }
+  }
+
   void _onSynced(int head) {
     final seq = coreInfo.realtimeSeq;
     if (seq != null && head < seq) {
@@ -419,7 +447,7 @@ class RealtimeSession {
     state.value = .live;
     _reconnectAttempts = 0;
 
-    if (_needsSnapshot) {
+    if (_needsSnapshot && !readOnly.value) {
       _needsSnapshot = false;
       coreInfo.pendingOps.clear();
       submit(
@@ -504,5 +532,6 @@ class RealtimeSession {
     _socket = null;
     unawaited(socket?.close());
     state.dispose();
+    readOnly.dispose();
   }
 }

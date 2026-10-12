@@ -33,7 +33,11 @@ export function errorMessage(error) {
   );
 }
 
-export function renderSignIn(root, { onSignedIn, reason }) {
+/**
+ * @param {object} [options.invitation] what the shared link that brought the
+ *   user here opens: `{ owner, name, readOnly }`
+ */
+export function renderSignIn(root, { onSignedIn, reason, invitation }) {
   const username = h('input', {
     autocomplete: 'username',
     autocapitalize: 'none',
@@ -77,8 +81,20 @@ export function renderSignIn(root, { onSignedIn, reason }) {
       },
     },
     h('img.logo', { src: '/web/icons/icon-192.png', alt: '' }),
-    h('h1', {}, 'Note+'),
-    h('p', {}, 'Vos notes manuscrites, synchronisées en direct sur tous vos appareils.'),
+    invitation
+      ? [
+          h('h1', {}, invitation.name),
+          h(
+            'p',
+            {},
+            `${invitation.owner} vous partage ce carnet${invitation.readOnly ? ' en lecture seule' : ''}. ` +
+              'Connectez-vous à Note+, ou créez un compte, pour l\'ouvrir.',
+          ),
+        ]
+      : [
+          h('h1', {}, 'Note+'),
+          h('p', {}, 'Vos notes manuscrites, synchronisées en direct sur tous vos appareils.'),
+        ],
     h('label.field', {}, icon('user'), username),
     h('label.field', {}, icon('lock'), password),
     error,
@@ -139,7 +155,11 @@ function notebookCard(note, { onOpen, onMenu, delay }) {
     },
     cover,
     h('div.name', {}, note.name),
-    h('div.meta', {}, note.shared ? `Partagé par ${note.owner}` : note.folder || 'Carnet'),
+    h(
+      'div.meta',
+      {},
+      note.shared ? `Partagé par ${note.owner}${note.readOnly ? ' · lecture seule' : ''}` : note.folder || 'Carnet',
+    ),
   );
   // a long press opens the menu instead of the notebook
   card.addEventListener(
@@ -258,6 +278,7 @@ export function renderLibrary(root, { onOpen, onSignedOut }) {
         name: relativeName(note.path),
         owner: note.owner,
         token: note.token,
+        readOnly: note.readOnly === true,
         shared: true,
       }));
     } catch (e) {
@@ -468,15 +489,44 @@ export function renderLibrary(root, { onOpen, onSignedOut }) {
 /** Copies the link that lets others open the note at `path`. */
 export async function copyShareLink(path) {
   try {
-    const { token } = await Api.share(path);
-    const link = `${location.origin}/s/${token}`;
+    const share = await Api.share(path);
+    const link = `${location.origin}/s/${share.token}`;
+    const modes = h('div.segmented');
+    const renderModes = () =>
+      modes.replaceChildren(
+        ...[
+          [false, 'Peuvent modifier'],
+          [true, 'Peuvent seulement lire'],
+        ].map(([readOnly, label]) =>
+          h(
+            'button' + (share.readOnly === readOnly ? '.selected' : ''),
+            {
+              type: 'button',
+              onclick: async () => {
+                if (share.readOnly === readOnly) return;
+                try {
+                  Object.assign(share, await Api.share(path, readOnly));
+                  renderModes();
+                } catch (e) {
+                  toast(errorMessage(e));
+                }
+              },
+            },
+            label,
+          ),
+        ),
+      );
+    renderModes();
     await sheet((close) => [
       h('h2', {}, 'Partager'),
       h(
         'p',
         {},
-        'Toute personne qui a ce lien peut ouvrir ce carnet et y écrire avec vous, en direct. Il lui faut un compte sur ce serveur.',
+        'Toute personne qui a ce lien peut ouvrir ce carnet, en direct. Il lui faut un compte sur ce serveur.',
       ),
+      h('h3.sheet-label', {}, 'Les personnes qui ont le lien'),
+      modes,
+      h('div', { style: { height: '12px' } }),
       h(
         'div.link-box',
         {},

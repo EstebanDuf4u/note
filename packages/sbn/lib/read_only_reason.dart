@@ -22,4 +22,10 @@ enum ReadOnlyReason {
   ///
   /// Editing is disabled to prevent overwriting the existing data.
   corrupted,
+
+  /// The note belongs to another account, which shared it with a link
+  /// that only lets others read it.
+  ///
+  /// Unlike the other reasons, the note is still synced and saved.
+  sharedReadOnly,
 }

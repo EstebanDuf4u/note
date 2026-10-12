@@ -2,14 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-/// A note that its owner shares with whoever has its link.
-typedef Share = ({String owner, String path});
+/// A note that its owner shares with whoever has its link,
+/// either to edit it or only to read it.
+typedef Share = ({String owner, String path, bool readOnly});
 
 /// The links that give other accounts access to notes, and the notes that
 /// each account has opened from a link.
 ///
 /// A link is a random token. Anyone signed in to the server who has it can
-/// open the note and edit it, until its owner stops sharing it.
+/// open the note, and edit it unless the link is read-only, until its owner
+/// stops sharing it.
 class ShareStore {
   new(this.file);
 
@@ -31,7 +33,11 @@ class ShareStore {
     for (final MapEntry(key: token, value: share)
         in (json['shares'] as Map<String, dynamic>).entries) {
       final map = share as Map<String, dynamic>;
-      _shares[token] = (owner: map['owner'] as String, path: map['path'] as String);
+      _shares[token] = (
+        owner: map['owner'] as String,
+        path: map['path'] as String,
+        readOnly: map['readOnly'] == true,
+      );
     }
     for (final MapEntry(key: user, value: tokens)
         in (json['accepted'] as Map<String, dynamic>).entries) {
@@ -45,7 +51,11 @@ class ShareStore {
       jsonEncode({
         'shares': {
           for (final MapEntry(key: token, value: share) in _shares.entries)
-            token: {'owner': share.owner, 'path': share.path},
+            token: {
+              'owner': share.owner,
+              'path': share.path,
+              if (share.readOnly) 'readOnly': true,
+            },
         },
         'accepted': {
           for (final MapEntry(key: user, value: tokens) in _accepted.entries)
@@ -61,12 +71,22 @@ class ShareStore {
 
   /// Returns the token of the note at [path] of [owner],
   /// creating one if the note isn't shared yet.
-  Future<String> share(String owner, String path) async {
-    if (tokenOf(owner, path) case final token?) return token;
+  ///
+  /// [readOnly] changes whether the link only lets others read the note;
+  /// when null, an existing link keeps its mode and a new one allows editing.
+  Future<String> share(String owner, String path, {bool? readOnly}) async {
+    if (tokenOf(owner, path) case final token?) {
+      final share = _shares[token]!;
+      if (readOnly != null && readOnly != share.readOnly) {
+        _shares[token] = (owner: owner, path: path, readOnly: readOnly);
+        await _save();
+      }
+      return token;
+    }
     final token = base64Url
         .encode(List.generate(18, (_) => _random.nextInt(256)))
         .replaceAll('=', '');
-    _shares[token] = (owner: owner, path: path);
+    _shares[token] = (owner: owner, path: path, readOnly: readOnly ?? false);
     await _save();
     return token;
   }
@@ -111,7 +131,11 @@ class ShareStore {
   Future<void> renamed(String owner, String fromPath, String toPath) async {
     final token = tokenOf(owner, fromPath);
     if (token == null) return;
-    _shares[token] = (owner: owner, path: toPath);
+    _shares[token] = (
+      owner: owner,
+      path: toPath,
+      readOnly: _shares[token]!.readOnly,
+    );
     await _save();
   }
 }

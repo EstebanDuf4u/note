@@ -259,6 +259,7 @@ class AccountSyncer {
         token: token,
         owner: shared.owner,
         ownerPath: shared.path,
+        readOnly: shared.readOnly,
         isTaken: _noteExists,
       );
       final path = note.localPath;
@@ -285,6 +286,7 @@ class AccountSyncer {
       token: token,
       owner: shared.owner,
       ownerPath: shared.path,
+      readOnly: shared.readOnly,
       isTaken: _noteExists,
     );
     if (!_noteExists(note.localPath)) {

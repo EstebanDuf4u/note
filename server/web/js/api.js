@@ -111,7 +111,9 @@ export const Api = {
   library: (entries) =>
     entries ? Api.request('POST', '/library', { entries }) : Api.request('GET', '/library'),
   deleteNote: (path) => Api.request('POST', '/notes/delete', { path }),
-  share: (path) => Api.request('POST', '/notes/share', { path }),
+  share: (path, readOnly) => Api.request('POST', '/notes/share', { path, readOnly }),
+  /** What the link `token` opens, which can be asked before signing in. */
+  sharePreview: (token) => Api.request('GET', '/shares/' + encodeURIComponent(token)),
   unshare: (path) => Api.request('POST', '/notes/unshare', { path }),
   acceptShare: (token) => Api.request('POST', '/shares/accept', { token }),
   leaveShare: (token) => Api.request('POST', '/shares/leave', { token }),

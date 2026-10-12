@@ -240,7 +240,16 @@ class RelayServer {
       case ('POST', '/notes/share'):
         final userId = _authenticate(request);
         final body = await _readBody(request);
-        return {'token': await shares.share(userId, _string(body, 'path'))};
+        final path = _string(body, 'path');
+        final readOnly = body['readOnly'];
+        final token = await shares.share(
+          userId,
+          path,
+          readOnly: readOnly is bool ? readOnly : null,
+        );
+        final share = shares[token]!;
+        (await _notesOf(userId)).shareModeChanged(path, token, share.readOnly);
+        return {'token': token, 'readOnly': share.readOnly};
 
       case ('POST', '/notes/unshare'):
         final userId = _authenticate(request);
@@ -271,6 +280,20 @@ class RelayServer {
           'path': share.path,
           'owner': accounts.nameOf(share.owner),
           'own': share.owner == userId,
+          'readOnly': share.readOnly,
+        };
+
+      case ('GET', final path) when path.startsWith('/shares/'):
+        // What a link opens, for the page that welcomes those who open it
+        // before signing in. Whoever has the link may know this much.
+        final share = shares[path.substring('/shares/'.length)];
+        if (share == null) {
+          throw const AccountException('not_found', HttpStatus.notFound);
+        }
+        return {
+          'owner': accounts.nameOf(share.owner),
+          'name': share.path.substring(share.path.lastIndexOf('/') + 1),
+          'readOnly': share.readOnly,
         };
 
       case ('POST', '/shares/leave'):
@@ -304,6 +327,7 @@ class RelayServer {
           'path': share.path,
           'owner': accounts.nameOf(share.owner),
           'head': await (await _notesOf(share.owner)).headOf(share.path),
+          'readOnly': share.readOnly,
         },
   ];
 
@@ -386,6 +410,11 @@ class RelayServer {
         case 'op':
           final room = client.room;
           if (room == null) throw const FormatException('Join a room first');
+          if (client.readOnly) {
+            // e.g. made offline before the link became read-only
+            client.send({'k': 'refused', 'cid': message['cid']});
+            return;
+          }
           await room.append(
             client,
             cid: _int(message['cid']),
@@ -443,6 +472,7 @@ class RelayServer {
       ..id = clientId
       ..userName = accounts.nameOf(userId) ?? ''
       ..share = shareToken is String ? shareToken : null
+      ..readOnly = share?.readOnly ?? false
       ..notes = notes
       ..room = room;
 
@@ -464,7 +494,15 @@ class RelayServer {
     } finally {
       room.joining--;
     }
-    client.send({'k': 'synced', 'head': room.head});
+    // the link's mode may have changed while the device caught up
+    if (shareToken is String) {
+      client.readOnly = shares[shareToken]?.readOnly ?? true;
+    }
+    client.send({
+      'k': 'synced',
+      'head': room.head,
+      if (client.readOnly) 'readOnly': true,
+    });
     room.clients.add(client);
     room.cancelIdleClose();
   }
@@ -648,6 +686,21 @@ class _UserNotes {
     });
   }
 
+  /// Tells the devices that opened the note at [path] with the link [token]
+  /// whether they may still edit it.
+  void shareModeChanged(String path, String token, bool readOnly) {
+    final room = _rooms[path];
+    if (room == null) return;
+    room.then((room) {
+      for (final client in room.clients) {
+        if (client.share != token || client.readOnly == readOnly) continue;
+        client
+          ..readOnly = readOnly
+          ..send({'k': 'access', 'readOnly': readOnly});
+      }
+    });
+  }
+
   /// Returns the notes of this account for `GET /notes`.
   Future<Map<String, dynamic>> list() => _synchronized(() async {
     final notes = <Map<String, dynamic>>[];
@@ -683,6 +736,9 @@ class _Client {
   /// The token of the link that this device opened the note with,
   /// if it's another account's note.
   String? share;
+
+  /// Whether [share] only lets this device read the note.
+  var readOnly = false;
   _UserNotes? notes;
   _Room? room;
 

@@ -35,7 +35,8 @@ class RemoteNotes {
 
   /// The notes of other accounts that the user opened from a link,
   /// by their link's token.
-  final Map<String, ({String path, String owner, int head})> shared;
+  final Map<String, ({String path, String owner, int head, bool readOnly})>
+  shared;
 
   /// The number of operations of each note, by the note's path.
   final Map<String, int> heads;
@@ -261,6 +262,7 @@ abstract final class RealtimeAccount {
             path: note['path'] as String,
             owner: note['owner'] as String? ?? '',
             head: (note['head'] as num).toInt(),
+            readOnly: note['readOnly'] == true,
           ),
       },
     );
@@ -272,14 +274,22 @@ abstract final class RealtimeAccount {
       _authorizedRequest('POST', '/notes/delete', body: {'path': path});
 
   /// Shares the note at [path] with whoever has its link,
-  /// and returns the link's token.
-  static Future<String> shareNote(String path) async {
+  /// and returns the link's token and whether it only lets others read it.
+  ///
+  /// [readOnly] changes the link's mode; when null, it's kept as it was.
+  static Future<({String token, bool readOnly})> shareNote(
+    String path, {
+    bool? readOnly,
+  }) async {
     final json = await _authorizedRequest(
       'POST',
       '/notes/share',
-      body: {'path': path},
+      body: {'path': path, 'readOnly': ?readOnly},
     );
-    return json['token'] as String;
+    return (
+      token: json['token'] as String,
+      readOnly: json['readOnly'] == true,
+    );
   }
 
   /// Stops sharing the note at [path]: its link stops working.
@@ -296,8 +306,10 @@ abstract final class RealtimeAccount {
       );
 
   /// Opens the note shared as [token], and returns where it is in its
-  /// owner's library, who the owner is, and whether it's the user's own.
-  static Future<({String path, String owner, bool own})> acceptShare(
+  /// owner's library, who the owner is, whether it's the user's own,
+  /// and whether the link only lets the user read it.
+  static Future<({String path, String owner, bool own, bool readOnly})>
+  acceptShare(
     String token,
   ) async {
     final json = await _authorizedRequest(
@@ -309,6 +321,7 @@ abstract final class RealtimeAccount {
       path: json['path'] as String,
       owner: json['owner'] as String? ?? '',
       own: json['own'] == true,
+      readOnly: json['readOnly'] == true,
     );
   }
 

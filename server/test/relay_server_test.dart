@@ -646,7 +646,13 @@ void main() {
       (_, body) = await request('GET', '/notes', token: bobToken);
       expect(body['notes'], isEmpty);
       expect(body['shared'], [
-        {'token': link, 'path': '/Maths', 'owner': 'alice', 'head': 2},
+        {
+          'token': link,
+          'path': '/Maths',
+          'owner': 'alice',
+          'head': 2,
+          'readOnly': false,
+        },
       ]);
 
       // once alice stops sharing it, bob is disconnected and can't come back
@@ -662,6 +668,96 @@ void main() {
       final b2 = await _TestClient.connect(server, bobToken)
         ..join('ignored', 'b', share: link);
       await b2.waitFor('deleted', 1);
+    });
+
+    test('a read-only link lets others read the note but not edit it', () async {
+      final a = await _TestClient.connect(server, token)
+        ..join('/Maths', 'a');
+      await a.waitFor('synced', 1);
+      a.send({
+        'k': 'op',
+        'cid': 1,
+        'd': {'n': 1},
+      });
+      await a.waitFor('ack', 1);
+
+      var (status, body) = await request(
+        'POST',
+        '/notes/share',
+        token: token,
+        body: {'path': '/Maths', 'readOnly': true},
+      );
+      expect(status, 200);
+      expect(body['readOnly'], true);
+      final link = body['token'] as String;
+
+      // before signing in, the link only tells what it opens
+      (status, body) = await request('GET', '/shares/$link');
+      expect(status, 200);
+      expect(body, {'owner': 'alice', 'name': 'Maths', 'readOnly': true});
+      (status, _) = await request('GET', '/shares/nope');
+      expect(status, 404);
+
+      final bobToken = await register('bob');
+      (_, body) = await request(
+        'POST',
+        '/shares/accept',
+        token: bobToken,
+        body: {'token': link},
+      );
+      expect(body['readOnly'], true);
+
+      final b = await _TestClient.connect(server, bobToken)
+        ..join('ignored', 'b', share: link);
+      final synced = await b.waitFor('synced', 1);
+      expect(synced.single['readOnly'], true);
+      expect(b.messages.where((m) => m['k'] == 'op'), hasLength(1));
+
+      // bob's changes are refused and alice never gets them
+      b.send({
+        'k': 'op',
+        'cid': 7,
+        'd': {'n': 2},
+      });
+      final refused = await b.waitFor('refused', 1);
+      expect(_int(refused.single['cid']), 7);
+      // but he still sees alice's
+      a.send({
+        'k': 'op',
+        'cid': 2,
+        'd': {'n': 3},
+      });
+      await b.waitFor('op', 2);
+      expect(a.messages.where((m) => m['k'] == 'op'), isEmpty);
+
+      // alice lets him edit, which he's told without reconnecting
+      (_, body) = await request(
+        'POST',
+        '/notes/share',
+        token: token,
+        body: {'path': '/Maths', 'readOnly': false},
+      );
+      expect(body['token'], link);
+      final access = await b.waitFor('access', 1);
+      expect(access.single['readOnly'], false);
+      b.send({
+        'k': 'op',
+        'cid': 8,
+        'd': {'n': 4},
+      });
+      final aOps = await a.waitFor('op', 1);
+      expect((aOps.single['d'] as Map)['n'], 4);
+
+      // sharing again without a mode keeps it
+      (_, body) = await request(
+        'POST',
+        '/notes/share',
+        token: token,
+        body: {'path': '/Maths'},
+      );
+      expect(body['readOnly'], false);
+      (_, body) = await request('GET', '/notes', token: bobToken);
+      expect((body['shared'] as List).single['readOnly'], false);
     });
 
     test('keeps the latest favorite and cover of each note', () async {
