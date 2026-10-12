@@ -95,6 +95,10 @@ sealed class EditorImage extends ChangeNotifier {
   /// The BoxFit used if this is a page's background image
   BoxFit backgroundFit;
 
+  /// Whether this image is drawn in front of the writing
+  /// instead of behind it.
+  var above = false;
+
   @protected
   new({
     required this.id,
@@ -151,6 +155,7 @@ sealed class EditorImage extends ChangeNotifier {
     }
     final uid = json['u'];
     if (uid is String && uid.isNotEmpty) image.uid = uid;
+    image.above = json['ab'] == true;
     return image;
   }
 
@@ -173,6 +178,7 @@ sealed class EditorImage extends ChangeNotifier {
     if (srcRect.height != 0) 'sh': srcRect.height,
     if (naturalSize.width != 0) 'nw': naturalSize.width,
     if (naturalSize.height != 0) 'nh': naturalSize.height,
+    if (above) 'ab': true,
   };
 
   /// Images are loaded out after 5 seconds of not being visible.

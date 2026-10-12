@@ -305,7 +305,11 @@ elements:
   empty: Sélectionnez de l'écriture au lasso et enregistrez-la comme élément pour l'ajouter à nouveau dans n'importe quelle note.
 sharing:
   title: Partager
-  description: Toute personne qui a le lien peut ouvrir cette note et y écrire avec vous, en direct. Il lui faut un compte sur votre serveur.
+  description: Toute personne qui a le lien peut ouvrir cette note, en direct. Il lui faut un compte sur votre serveur.
+  access: Les personnes qui ont le lien
+  canEdit: Peuvent modifier
+  canRead: Peuvent seulement lire
+  sharedByReadOnly: Partagée avec vous par $owner, en lecture seule
   createLink: Créer un lien
   copy: Copier le lien
   copied: Lien copié
@@ -429,6 +433,8 @@ editor:
     download: Télécharger
     setAsBackground: Utiliser comme fond
     removeAsBackground: Supprimer de l'arrière-plan
+    bringAboveWriting: Devant l'écriture
+    sendBehindWriting: Derrière l'écriture
     delete: Effacer
   selectionBar:
     delete: Effacer
@@ -466,6 +472,7 @@ editor:
     title: Mode lecture seule
     watchingServer: Vous visualisez actuellement les mises à jour sur le serveur. L'édition est désactivée dans ce mode.
     corrupted: Le chargement de la note a échoué. Il peut être corrompu ou encore en cours de téléchargement.
+    sharedReadOnly: Cette note vous est partagée en lecture seule. Vous voyez en direct les changements des autres.
   versionTooNew:
     title: Cette note a été modifiée avec une version plus récente de Note+
     subtitle: Éditer cette note pourrait entraîner la perte de certaines informations. Voulez-vous la modifier quand même ?

@@ -67,6 +67,7 @@ void main() {
     expect(image.uid, 'webImage1');
     // moved by the update after it was added
     expect(image.dstRect, const Rect.fromLTWH(120, 200, 300, 150));
+    expect(image.above, isTrue, reason: 'Put in front of the writing');
 
     expect(coreInfo.flashcards, isTrue);
     final study = pages.first.study!;

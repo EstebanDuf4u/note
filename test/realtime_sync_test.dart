@@ -69,11 +69,17 @@ class _Device {
     }
   }
 
-  void connect(RelayServer server, {String room = '/note'}) {
+  void connect(
+    RelayServer server, {
+    String room = '/note',
+    String? token,
+    String? share,
+  }) {
     session = RealtimeSession(
       serverUrl: 'ws://127.0.0.1:${server.port}',
-      token: _token,
+      token: token ?? _token,
       room: room,
+      share: share,
       clientId: name,
       applier: applier,
       onRemoteChange: () => remoteChanges++,
@@ -463,6 +469,34 @@ void main() {
       expect(b.pages.first.images, isEmpty);
       expect(b.contents, a.contents);
       expect(b.pages, hasLength(1), reason: 'Should remove the excess page');
+    });
+
+    test('an image in front of the writing stays there', () {
+      final a = _Device('a'), b = _Device('b');
+      final image = a.addImage(0)..above = true;
+      b.receive([NoteOps.updateImage(image, a.coreInfo)]);
+      b.receive(a.lastOps);
+      final received = b.pages.first.images.single;
+      expect(received.above, isFalse, reason: 'Added before it was moved');
+
+      b.receive([NoteOps.updateImage(image, a.coreInfo)]);
+      expect(received.above, isTrue);
+      expect(received.toJson(OrderedAssetCache())['ab'], isTrue);
+
+      // a client that doesn't know about it leaves it as it is
+      b.receive([
+        {...NoteOps.updateImage(image, a.coreInfo)}..remove('ab'),
+      ]);
+      expect(received.above, isTrue);
+
+      final copy = EditorImage.fromJson(
+        {...image.toJson(OrderedAssetCache()), 'a': 0},
+        inlineAssets: [_pngBytes],
+        sbnPath: '',
+        assetCache: AssetCache(),
+      );
+      expect(copy.above, isTrue);
+      expect(image.copy().above, isTrue);
     });
 
     test('an image keeps its uid when saved', () {
@@ -1007,6 +1041,51 @@ void main() {
       b.connect(server);
       await inSync(a, b);
       expect(a.pages.first.strokes, hasLength(2));
+    });
+
+    test('a note shared to read only follows the owner\'s changes', () async {
+      /// Sets whether the link of [path] only lets others read it.
+      Future<String> shareNote(String path, {required bool readOnly}) async {
+        final request = await HttpClient().post(
+          '127.0.0.1',
+          server.port,
+          '/notes/share',
+        );
+        request.headers.set('Authorization', 'Bearer $_token');
+        request.write(jsonEncode({'path': path, 'readOnly': readOnly}));
+        final response = await request.close();
+        final json = jsonDecode(await utf8.decodeStream(response)) as Map;
+        return json['token'] as String;
+      }
+
+      final a = device('a');
+      await live(a);
+      a.draw(0);
+      await _until(() => a.coreInfo.pendingOps.isEmpty);
+      final link = await shareNote('/note', readOnly: true);
+
+      final (_, bobToken) = await server.accounts.register('bob', 'password');
+      final b = _Device('b')
+        ..connect(server, room: 'ignored', token: bobToken, share: link);
+      devices.add(b);
+      await live(b);
+      await inSync(a, b);
+      expect(b.session!.readOnly.value, isTrue);
+
+      // b's changes stay on b, which a doesn't see
+      b.draw(1);
+      expect(b.coreInfo.pendingOps, isEmpty);
+      a.draw(0, at: const Offset(50, 50));
+      await _until(() => b.pages[0].strokes.length == 2);
+      expect(a.pages[1].strokes, isEmpty);
+
+      // b may edit as soon as a allows it
+      await shareNote('/note', readOnly: false);
+      await _until(() => !b.session!.readOnly.value);
+      b.pages[1].strokes.clear();
+      b.draw(1);
+      await inSync(a, b);
+      expect(a.pages[1].strokes, hasLength(1));
     });
 
     test('offline changes are sent after reconnecting', () async {

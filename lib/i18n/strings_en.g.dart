@@ -370,8 +370,20 @@ class Translations$sharing$en {
 	/// en: 'Share'
 	String get title => 'Share';
 
-	/// en: 'Anyone with the link can open this note and write in it with you, as it happens. They need an account on your server.'
-	String get description => 'Anyone with the link can open this note and write in it with you, as it happens. They need an account on your server.';
+	/// en: 'Anyone who has the link can open this note, live. They need an account on your server.'
+	String get description => 'Anyone who has the link can open this note, live. They need an account on your server.';
+
+	/// en: 'Those who have the link'
+	String get access => 'Those who have the link';
+
+	/// en: 'Can edit'
+	String get canEdit => 'Can edit';
+
+	/// en: 'Can read only'
+	String get canRead => 'Can read only';
+
+	/// en: 'Shared with you by $owner, to read only'
+	String sharedByReadOnly({required Object owner}) => 'Shared with you by ${owner}, to read only';
 
 	/// en: 'Create a link'
 	String get createLink => 'Create a link';
@@ -1630,6 +1642,12 @@ class Translations$editor$imageOptions$en {
 	/// en: 'Remove as background'
 	String get removeAsBackground => 'Remove as background';
 
+	/// en: 'In front of the writing'
+	String get bringAboveWriting => 'In front of the writing';
+
+	/// en: 'Behind the writing'
+	String get sendBehindWriting => 'Behind the writing';
+
 	/// en: 'Delete'
 	String get delete => 'Delete';
 }
@@ -1719,6 +1737,9 @@ class Translations$editor$readOnlyBanner$en {
 
 	/// en: 'Failed to load note. It may be corrupted or still being downloaded.'
 	String get corrupted => 'Failed to load note. It may be corrupted or still being downloaded.';
+
+	/// en: 'This note was shared with you to read only. You see the changes of the others live.'
+	String get sharedReadOnly => 'This note was shared with you to read only. You see the changes of the others live.';
 }
 
 // Path: editor.versionTooNew

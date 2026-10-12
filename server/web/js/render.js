@@ -325,7 +325,7 @@ export function drawPage(ctx, note, page, { onImageLoad, selected, hidden } = {}
     drawImage(ctx, note, page, page.backgroundImage, onImageLoad, true);
   }
   for (const image of page.images) {
-    if (!hidden?.has(image)) drawImage(ctx, note, page, image, onImageLoad, false);
+    if (!image.above && !hidden?.has(image)) drawImage(ctx, note, page, image, onImageLoad, false);
   }
   drawText(ctx, page);
 
@@ -355,6 +355,11 @@ export function drawPage(ctx, note, page, { onImageLoad, selected, hidden } = {}
   for (const stroke of page.strokes) {
     if (stroke.tool === Tools.highlighter || hidden?.has(stroke)) continue;
     drawStroke(ctx, stroke, { selected: selected?.has(stroke) });
+  }
+
+  // the photos put in front of the writing
+  for (const image of page.images) {
+    if (image.above && !hidden?.has(image)) drawImage(ctx, note, page, image, onImageLoad, false);
   }
 }
 

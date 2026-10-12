@@ -102,105 +102,116 @@ class _InnerCanvasState extends State<InnerCanvas> {
           )
         : null;
 
-    return RepaintBoundary(
-      child: CustomPaint(
-        painter: CanvasBackgroundPainter(
-          invert: invert,
-          backgroundColor: () {
-            if (page.backgroundImage != null) {
-              return Colors.white;
-            } else {
-              return backgroundColor;
-            }
-          }(),
-          backgroundPattern: () {
-            if (page.backgroundImage != null) {
-              return CanvasBackgroundPattern.none;
-            } else {
-              return widget.coreInfo.backgroundPattern;
-            }
-          }(),
-          lineHeight: widget.coreInfo.lineHeight,
-          lineThickness: widget.coreInfo.lineThickness,
-          primaryColor: colorScheme.primary,
-          secondaryColor: colorScheme.secondary,
-        ),
-        foregroundPainter: CanvasPainter(
-          repaint: widget.redrawPageListenable,
-          invert: invert,
-          strokes: page.strokes,
-          laserStrokes: page.laserStrokes,
-          currentStroke: widget.currentStroke,
-          currentSelection: widget.currentSelection,
-          primaryColor: colorScheme.primary,
-          page: page,
-          showPageIndicator: widget.showPageIndicator,
-          pageIndex: widget.pageIndex,
-          totalPages: widget.coreInfo.pages.length,
-          currentScale: widget.currentScale,
-          defaultTextStyle: theme.textTheme.bodyMedium!,
-        ),
-        isComplex: true,
-        willChange: true,
-        child: SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: DeferredPointerHandler(
-            child: Stack(
-              children: [
-                if (page.backgroundImage != null)
-                  CanvasImage(
-                    filePath: widget.coreInfo.filePath,
-                    image: page.backgroundImage!,
-                    pageSize: Size(widget.width, widget.height),
-                    setAsBackground: null,
-                    isBackground: true,
-                    readOnly: true,
-                  ),
-                if (widget.coreInfo.flashcards)
-                  // between the question and the answer
-                  Positioned(
-                    top: page.size.height / 2 - 1,
-                    left: 0,
-                    width: widget.width,
-                    height: 2,
-                    child: IgnorePointer(
-                      child: CustomPaint(
-                        painter: _DashedLinePainter(
-                          colorScheme.primary.withValues(alpha: 0.5),
-                        ),
+    Widget canvasImage(EditorImage image) => CanvasImage(
+      filePath: widget.coreInfo.filePath,
+      image: image,
+      pageSize: Size(widget.width, widget.height),
+      setAsBackground: widget.setAsBackground,
+      readOnly: widget.coreInfo.readOnly || !widget.currentToolIsSelect,
+      selected: widget.currentSelection?.images.contains(image) ?? false,
+    );
+
+    final canvas = CustomPaint(
+      painter: CanvasBackgroundPainter(
+        invert: invert,
+        backgroundColor: () {
+          if (page.backgroundImage != null) {
+            return Colors.white;
+          } else {
+            return backgroundColor;
+          }
+        }(),
+        backgroundPattern: () {
+          if (page.backgroundImage != null) {
+            return CanvasBackgroundPattern.none;
+          } else {
+            return widget.coreInfo.backgroundPattern;
+          }
+        }(),
+        lineHeight: widget.coreInfo.lineHeight,
+        lineThickness: widget.coreInfo.lineThickness,
+        primaryColor: colorScheme.primary,
+        secondaryColor: colorScheme.secondary,
+      ),
+      foregroundPainter: CanvasPainter(
+        repaint: widget.redrawPageListenable,
+        invert: invert,
+        strokes: page.strokes,
+        laserStrokes: page.laserStrokes,
+        currentStroke: widget.currentStroke,
+        currentSelection: widget.currentSelection,
+        primaryColor: colorScheme.primary,
+        page: page,
+        showPageIndicator: widget.showPageIndicator,
+        pageIndex: widget.pageIndex,
+        totalPages: widget.coreInfo.pages.length,
+        currentScale: widget.currentScale,
+        defaultTextStyle: theme.textTheme.bodyMedium!,
+      ),
+      isComplex: true,
+      willChange: true,
+      child: SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: DeferredPointerHandler(
+          child: Stack(
+            children: [
+              if (page.backgroundImage != null)
+                CanvasImage(
+                  filePath: widget.coreInfo.filePath,
+                  image: page.backgroundImage!,
+                  pageSize: Size(widget.width, widget.height),
+                  setAsBackground: null,
+                  isBackground: true,
+                  readOnly: true,
+                ),
+              if (widget.coreInfo.flashcards)
+                // between the question and the answer
+                Positioned(
+                  top: page.size.height / 2 - 1,
+                  left: 0,
+                  width: widget.width,
+                  height: 2,
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _DashedLinePainter(
+                        colorScheme.primary.withValues(alpha: 0.5),
                       ),
                     ),
                   ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  width: widget.width,
-                  height: widget.height,
-                  child: IgnorePointer(
-                    ignoring: widget.coreInfo.readOnly || !widget.textEditing,
-                    child: quillEditor,
-                  ),
                 ),
-                for (int i = 0; i < page.images.length; i++)
-                  CanvasImage(
-                    filePath: widget.coreInfo.filePath,
-                    image: page.images[i],
-                    pageSize: Size(widget.width, widget.height),
-                    setAsBackground: widget.setAsBackground,
-                    readOnly:
-                        widget.coreInfo.readOnly || !widget.currentToolIsSelect,
-                    selected:
-                        widget.currentSelection?.images.contains(
-                          page.images[i],
-                        ) ??
-                        false,
-                  ),
-              ],
-            ),
+              Positioned(
+                top: 0,
+                left: 0,
+                width: widget.width,
+                height: widget.height,
+                child: IgnorePointer(
+                  ignoring: widget.coreInfo.readOnly || !widget.textEditing,
+                  child: quillEditor,
+                ),
+              ),
+              for (final image in page.images)
+                if (!image.above) canvasImage(image),
+            ],
           ),
         ),
       ),
+    );
+
+    final imagesAbove = page.images.where((image) => image.above).toList();
+    return RepaintBoundary(
+      child: imagesAbove.isEmpty
+          ? canvas
+          // the strokes are painted over the canvas' children,
+          // so these images are stacked on top of it
+          : DeferredPointerHandler(
+              child: Stack(
+                children: [
+                  canvas,
+                  for (final image in imagesAbove) canvasImage(image),
+                ],
+              ),
+            ),
     );
   }
 }
