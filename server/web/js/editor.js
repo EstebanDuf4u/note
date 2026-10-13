@@ -15,7 +15,9 @@ import {
 } from './geometry.js';
 import { copyShareLink, errorMessage, PAPERS } from './library.js';
 import { Note, Ops, Page, Stroke, Tools, newId } from './model.js';
-import { boundsOf, cssColor, drawImage, drawPage, drawStroke, smoothPath, strokePolygon } from './render.js';
+import { boundsOf, cssColor, drawImage, drawPage, drawQuiz, drawStroke, quizHeight, smoothPath, strokePolygon } from './render.js';
+import { answerQuiz, editQuiz, noteQuiz } from './quiz.js';
+import { isDue } from './study.js';
 import { Session } from './session.js';
 import { base64Url, sha256 } from './sha256.js';
 import { study } from './study.js';
@@ -220,8 +222,9 @@ export class Editor {
         this.presenceEl,
         (this.studyButton = h(
           'button.icon-btn.study-btn',
-          { onclick: () => this.study(), 'aria-label': 'Réviser', title: 'Réviser', hidden: true },
-          icon('cards'),
+          { onclick: () => this.showQuiz(), 'aria-label': 'Quiz du carnet', title: 'Quiz du carnet', hidden: true },
+          icon('quiz'),
+          (this.dueBadge = h('span.badge', { hidden: true })),
         )),
         this.undoButton,
         this.redoButton,
@@ -232,6 +235,8 @@ export class Editor {
 
     this.dock = h('div.dock');
     this.pagePill = h('button.page-pill', { onclick: () => this.showPages() }, '');
+    // how zoomed in the page is, and a way back
+    this.zoomPill = h('button.zoom-pill', { onclick: () => this.resetZoom(), title: 'Revenir à la largeur de la page', hidden: true });
     this.overlayLayer = h('div');
     this.loading = h('div.offline-banner', {}, h('div.spinner'), 'Ouverture du carnet…');
 
@@ -242,6 +247,7 @@ export class Editor {
       header,
       this.loading,
       this.pagePill,
+      this.zoomPill,
       this.dock,
       this.overlayLayer,
     );
@@ -304,19 +310,19 @@ export class Editor {
     // the pens share a button, to fit on phones
     const penTool = PEN_KINDS.includes(this.tool) ? this.tool : load('lastPen', 'fountainPen');
     const tools = [
-      [penTool, PENS[penTool].icon, PENS[penTool].name],
-      ['highlighter', PENS.highlighter.icon, 'Surligneur'],
-      ['shapePen', 'shapes', 'Formes'],
-      ['eraser', 'eraser', 'Gomme'],
-      ['lasso', 'lasso', 'Lasso'],
-      ['tape', 'tape', 'Ruban adhésif'],
-      ['laser', 'laser', 'Pointeur laser'],
+      [penTool, PENS[penTool].icon, PENS[penTool].name, 'Stylo'],
+      ['highlighter', PENS.highlighter.icon, 'Surligneur', 'Surligner'],
+      ['shapePen', 'shapes', 'Formes', 'Formes'],
+      ['eraser', 'eraser', 'Gomme', 'Gomme'],
+      ['lasso', 'lasso', 'Lasso', 'Sélection'],
+      ['tape', 'tape', 'Ruban adhésif', 'Ruban'],
+      ['laser', 'laser', 'Pointeur laser', 'Laser'],
     ];
     const pen = PENS[this.tool];
     const settings = pen ? this.settingsOf(this.tool) : null;
     this.dock.replaceChildren(
       ...[
-      ...tools.map(([tool, iconName, label]) => {
+      ...tools.map(([tool, iconName, label, name]) => {
         const selected = this.tool === tool;
         const tipColor = PENS[tool] ? cssColor(this.settingsOf(tool).color, 1) : 'var(--brand)';
         return h(
@@ -334,14 +340,17 @@ export class Editor {
           },
           icon(iconName),
           h('span.tip', { style: { background: tipColor } }),
+          // names under the icons, where there's room for them
+          h('span.name', {}, name),
         );
       }),
       h('div.sep'),
       pen
         ? h(
             'button.tool',
-            { onclick: () => this.togglePopover(), 'aria-label': 'Couleur et taille' },
+            { onclick: () => this.togglePopover(), 'aria-label': 'Couleur et taille', title: 'Couleur et taille' },
             h('div.color-dot', { style: { background: cssColor(settings.color, 1) } }),
+            h('span.name', {}, 'Couleur'),
           )
         : null,
       matchMedia('(pointer: coarse)').matches || this.penSeen
@@ -370,6 +379,7 @@ export class Editor {
               },
             },
             icon('hand'),
+            h('span.name', {}, 'Doigt'),
           )
         : null,
       ].filter(Boolean),
@@ -591,6 +601,7 @@ export class Editor {
     const page = this.note.pages[index];
     const bookmarked = page?.bookmark !== null && page?.bookmark !== undefined;
     const edit = !this.readOnly;
+    const quizCount = this.note.quizzes.length;
     const item = (iconName, label, action, { active = false, filled = false } = {}) =>
       h(
         'button.ribbon-item' + (active ? '.active' : ''),
@@ -603,6 +614,7 @@ export class Editor {
         id: 'insert',
         label: 'Insérer',
         items: [
+          item('quiz', 'Question', 'quiz'),
           item('photo', 'Photo', 'photo'),
           item('star', 'Éléments', 'elements'),
           item('text', 'Texte', 'text'),
@@ -622,8 +634,8 @@ export class Editor {
         id: 'note',
         label: 'Carnet',
         items: [
-          edit && item('cards', 'Fiches de révision', 'flashcards', { active: this.note.flashcards }),
-          this.note.flashcards && item('sparkles', 'Réviser', 'study'),
+          item('sparkles', quizCount ? `Quiz (${quizCount})` : 'Quiz', 'noteQuiz'),
+          edit && item('cards', 'Pages-fiches', 'flashcards', { active: this.note.flashcards }),
           !this.options.share && item('share', 'Partager', 'share'),
           item('download', 'PDF', 'pdf'),
         ],
@@ -634,6 +646,7 @@ export class Editor {
         items: [
           item('pages', 'Pages une à une', 'paged', { active: this.paged }),
           item('notebook', 'Ajuster à la largeur', 'fit'),
+          item('help', 'Aide', 'help'),
         ],
       },
     ].filter(Boolean);
@@ -642,7 +655,7 @@ export class Editor {
   /** What the ribbon's buttons depend on, to know when to draw it again. */
   ribbonState() {
     const page = this.note.pages[this.currentPageIndex];
-    return [this.currentPageIndex, page?.bookmark ?? null, this.note.flashcards, this.paged, this.readOnly].join(':');
+    return [this.currentPageIndex, page?.bookmark ?? null, this.note.flashcards, this.paged, this.readOnly, this.note.quizzes.length].join(':');
   }
 
   renderRibbon() {
@@ -742,6 +755,8 @@ export class Editor {
     if (!this.loaded) {
       this.loaded = true;
       this.loading.remove();
+      // the first time, how it works
+      if (!this.readOnly && !load('helpSeen', false)) setTimeout(() => this.showHelp(), 400);
       // changes that couldn't be sent before the page was closed
       try {
         const saved = localStorage.getItem(this.pendingKey);
@@ -806,6 +821,7 @@ export class Editor {
   applyLocally(ops) {
     for (const op of ops) this.note.apply(clone(op));
     this.clearSelection();
+    this.renderHeaderActions();
     this.requestFrame();
   }
 
@@ -847,6 +863,18 @@ export class Editor {
     if (!this.paged) return width;
     // the whole page fits between the header and the tools
     return Math.min(width, (this.height - this.headerHeight - 110) / 1400);
+  }
+
+  /** Zooms back to the width of the page, staying where the user is. */
+  resetZoom() {
+    const index = this.currentPageIndex;
+    const [, wy] = this.toWorld(this.width / 2, this.height / 2);
+    const z = this.fitZoom;
+    this.camera.z = z;
+    this.camera.x = this.paged ? this.pagedCameraX(index, z) : (1000 - this.width / z) / 2;
+    this.camera.y = wy - this.height / 2 / z;
+    this.clampCamera();
+    this.requestFrame();
   }
 
   fitWidth() {
@@ -1122,7 +1150,8 @@ export class Editor {
         // while they move, they're left out of the page's picture
         if (this.hidden) {
           for (const image of this.selection.images) {
-            drawImage(ctx, this.note, page, image, () => this.requestFrame(), false);
+            if (image.isQuiz) drawQuiz(ctx, image);
+            else drawImage(ctx, this.note, page, image, () => this.requestFrame(), false);
           }
           for (const stroke of this.selection.strokes) drawStroke(ctx, stroke);
         }
@@ -1178,6 +1207,12 @@ export class Editor {
     const current = Math.min(this.currentPageIndex + 1, this.note.pages.length);
     this.pagePill.innerHTML = icon('pages');
     this.pagePill.append(`${current} / ${Math.max(pageCount, current)}`);
+    const zoom = this.camera.z / this.fitZoom;
+    this.zoomPill.hidden = Math.abs(zoom - 1) < 0.04;
+    if (!this.zoomPill.hidden) {
+      this.zoomPill.innerHTML = icon('zoom');
+      this.zoomPill.append(`${Math.round(zoom * 100)} %`);
+    }
     // e.g. the bookmark button follows the page on screen
     if (this.ribbonKey !== this.ribbonState()) this.renderRibbon();
     this.positionSelectionBar();
@@ -1431,6 +1466,12 @@ export class Editor {
     if (gesture.kind === 'pan') {
       if (gesture.pointerId !== e.pointerId) return;
       this.endPan();
+      // a finger's tap on a question answers it
+      if (point && Math.hypot(point.x - point.sx, point.y - point.sy) < 4) {
+        const hit = this.pageAt(point.sx, point.sy);
+        const quiz = hit && imageAt(hit.page.quizzes, hit.x, hit.y);
+        if (quiz) return this.openQuiz(hit.page, quiz);
+      }
       // a note that can't be edited can still be quizzed with its tape
       if (this.readOnly && point && Math.hypot(point.x - point.sx, point.y - point.sy) < 4) {
         const hit = this.pageAt(point.sx, point.sy);
@@ -1651,7 +1692,7 @@ export class Editor {
     if (!pickImage) return false;
     // a photo is picked up directly
     const hit = this.pageAt(point.x, point.y);
-    const image = hit && imageAt(hit.page.images, hit.x, hit.y);
+    const image = hit && this.objectAt(hit.page, hit.x, hit.y);
     if (!image) return false;
     this.select(hit.page, [], [image]);
     this.gesture = {
@@ -1661,6 +1702,11 @@ export class Editor {
     this.moving = true;
     this.hideSelectionBar();
     return true;
+  }
+
+  /** The question block or photo of `page` at (x, y), the topmost first. */
+  objectAt(page, x, y) {
+    return imageAt(page.quizzes, x, y) ?? imageAt(page.images, x, y);
   }
 
   /** The corners of the box `b` that resize the selection. */
@@ -1739,7 +1785,7 @@ export class Editor {
     const gesture = { kind: 'stroke', pointerId: e.pointerId, byTouch, page: hit.page };
     this.gesture = gesture;
     // holding still on a photo picks it up instead of writing
-    const image = imageAt(hit.page.images, hit.x, hit.y);
+    const image = this.objectAt(hit.page, hit.x, hit.y);
     if (image) {
       gesture.holdFrom = [point.x, point.y];
       gesture.hold = setTimeout(() => this.pickUpHeld(gesture, image), HOLD_DELAY);
@@ -1764,7 +1810,7 @@ export class Editor {
     if (this.gesture !== gesture) return;
     const page = gesture.page;
     const pointer = this.pointers.get(gesture.pointerId);
-    if (!pointer || !page.images.includes(image)) return;
+    if (!pointer || !(page.images.includes(image) || page.quizzes.includes(image))) return;
     // the dot written so far is dropped
     this.current = null;
     const [x, y] = this.pointOn(page, { offsetX: pointer.x, offsetY: pointer.y });
@@ -1882,6 +1928,11 @@ export class Editor {
             page.changed();
             break;
           }
+          const quiz = imageAt(page.quizzes, stroke.points[0][0], stroke.points[0][1]);
+          if (quiz) {
+            this.openQuiz(page, quiz);
+            break;
+          }
         }
         stroke.options.f = true;
         if (stroke.tool === Tools.tape && isStraightLine(stroke)) straighten(stroke);
@@ -1929,7 +1980,7 @@ export class Editor {
         this.lasso = null;
         if (points.length < 3) break;
         const strokes = strokesInLasso(page.strokes, points);
-        const images = imagesInLasso(page.images, points);
+        const images = [...imagesInLasso(page.images, points), ...imagesInLasso(page.quizzes, points)];
         if (strokes.length || images.length) this.select(page, strokes, images);
         break;
       }
@@ -1943,11 +1994,11 @@ export class Editor {
           this.commit(
             [
               ...(strokes.length ? [Ops.moveStrokes(strokes, gesture.dx, gesture.dy)] : []),
-              ...images.map((image) => Ops.updateImage(page, image)),
+              ...images.map((image) => this.placeOp(page, image)),
             ],
             [
               ...(strokes.length ? [Ops.moveStrokes(strokes, -gesture.dx, -gesture.dy)] : []),
-              ...images.map((image, i) => Ops.updateImage(page, image, gesture.rects[i])),
+              ...images.map((image, i) => this.placeOp(page, image, gesture.rects[i])),
             ],
           );
         }
@@ -1964,11 +2015,11 @@ export class Editor {
           this.commit(
             [
               ...(strokes.length ? [Ops.scaleStrokes(strokes, ax, ay, gesture.factor)] : []),
-              ...images.map((image) => Ops.updateImage(page, image)),
+              ...images.map((image) => this.placeOp(page, image)),
             ],
             [
               ...(strokes.length ? [Ops.scaleStrokes(strokes, ax, ay, 1 / gesture.factor)] : []),
-              ...images.map((image, i) => Ops.updateImage(page, image, gesture.rects[i])),
+              ...images.map((image, i) => this.placeOp(page, image, gesture.rects[i])),
             ],
           );
         }
@@ -2037,7 +2088,10 @@ export class Editor {
       this.selection?.strokes.length
         ? h('button', { onclick: () => this.recolorSelection(), title: 'Couleur', 'aria-label': 'Couleur' }, icon('palette'), h('span.label', {}, 'Couleur'))
         : null,
-      this.selection?.images.length ? this.layerButton() : null,
+      this.selection?.images.length === 1 && this.selection.images[0].isQuiz && !this.selection.strokes.length
+        ? h('button', { onclick: () => this.editQuizBlock(this.selection.page, this.selection.images[0]), title: 'Modifier', 'aria-label': 'Modifier' }, icon('ballpoint'), h('span.label', {}, 'Modifier'))
+        : null,
+      this.selection?.images.some((image) => !image.isQuiz) ? this.layerButton() : null,
       h('button', { onclick: () => this.duplicateSelection(), title: 'Dupliquer', 'aria-label': 'Dupliquer' }, icon('copy'), h('span.label', {}, 'Dupliquer')),
       this.selection?.strokes.length
         ? h('button', { onclick: () => this.saveElement(), title: 'Élément', 'aria-label': 'Élément' }, icon('star'), h('span.label', {}, 'Élément'))
@@ -2069,14 +2123,21 @@ export class Editor {
   }
 
   deleteSelection() {
-    const { page, strokes, images } = this.selection;
+    let { page, strokes, images } = this.selection;
     for (const stroke of strokes) page.strokes.splice(page.strokes.indexOf(stroke), 1);
+    const quizzes = images.filter((image) => image.isQuiz);
+    images = images.filter((image) => !image.isQuiz);
     for (const image of images) page.images.splice(page.images.indexOf(image), 1);
+    for (const quiz of quizzes) page.quizzes.splice(page.quizzes.indexOf(quiz), 1);
     page.changed();
     this.clearSelection();
     this.note.ensureBlankLastPage();
     const ops = [];
     const inverse = [];
+    if (quizzes.length) {
+      ops.push(Ops.removeQuizzes(quizzes));
+      inverse.push(...quizzes.flatMap((quiz) => [Ops.addQuiz(page, quiz), Ops.quizStudy(quiz)]));
+    }
     if (strokes.length) {
       ops.push(Ops.removeStrokes(strokes));
       inverse.push(...strokes.map((stroke) => Ops.addStroke(page, stroke)));
@@ -2098,26 +2159,139 @@ export class Editor {
       return copy;
     });
     const imageCopies = images.map((image) => {
-      const copy = { ...image, uid: newId(), x: image.x + 24, y: image.y + 24 };
-      page.images.push(copy);
+      // a copied question starts unlearned
+      const copy = { ...image, uid: newId(), x: image.x + 24, y: image.y + 24, ...(image.isQuiz ? { study: null } : {}) };
+      (image.isQuiz ? page.quizzes : page.images).push(copy);
       return copy;
     });
+    const photos = imageCopies.filter((image) => !image.isQuiz);
+    const quizzes = imageCopies.filter((image) => image.isQuiz);
     page.changed();
     const ops = [
       ...copies.map((stroke) => Ops.addStroke(page, stroke)),
-      ...imageCopies.flatMap((image) => Ops.addImage(page, image, { sendAsset: false })),
+      ...photos.flatMap((image) => Ops.addImage(page, image, { sendAsset: false })),
+      ...quizzes.map((quiz) => Ops.addQuiz(page, quiz)),
     ];
     const inverse = [
       ...(copies.length ? [Ops.removeStrokes(copies)] : []),
-      ...(imageCopies.length ? [Ops.removeImages(imageCopies)] : []),
+      ...(photos.length ? [Ops.removeImages(photos)] : []),
+      ...(quizzes.length ? [Ops.removeQuizzes(quizzes)] : []),
     ];
     this.commit(ops, inverse);
     this.select(page, copies, imageCopies);
   }
 
+  /** Where `item`, a photo or a question block, is: `rect` being where it was. */
+  placeOp(page, item, rect = item) {
+    return item.isQuiz ? Ops.updateQuiz(item, rect) : Ops.updateImage(page, item, rect);
+  }
+
+  // Help
+
+  /** The gestures and where things are, shown once and from the ribbon. */
+  showHelp() {
+    save('helpSeen', true);
+    const tip = (iconName, title, text) =>
+      h('div.help-tip', {}, h('div.help-icon', {}, icon(iconName)), h('div', {}, h('strong', {}, title), h('span', {}, text)));
+    return sheet((close) => [
+      h('h2', {}, 'Bien démarrer'),
+      h(
+        'div.help-tips',
+        {},
+        tip('ballpoint', 'Écrire', "Au stylet ou au doigt. Avec un stylet, le doigt fait défiler la page et la main peut se poser sur l'écran."),
+        tip('palette', 'Couleur et taille', 'Touchez le rond de couleur dans la barre du bas, ou touchez à nouveau le stylo choisi.'),
+        tip('zoom', 'Zoomer et se déplacer', 'Pincez avec deux doigts, glissez pour défiler. Touchez le pourcentage en bas pour revenir à la largeur de la page.'),
+        tip('undo', 'Annuler', 'Touchez l’écran avec deux doigts (trois pour rétablir), ou les flèches en haut.'),
+        tip('photo', 'Photos et questions', 'Gardez le stylet ou le doigt immobile dessus pour les attraper, puis glissez. Les coins changent la taille.'),
+        tip('quiz', 'Quiz', 'Insérer → Question ajoute une question sur la page. Touchez-la pour répondre. Carnet → Quiz les révise toutes.'),
+        tip('eraser', 'Gommer', 'Choisissez la gomme, ou gardez le bouton du stylet appuyé (S Pen).'),
+      ),
+      h('button.btn.primary.block', { onclick: () => close() }, "C'est parti"),
+    ]);
+  }
+
+  // Questions
+
+  /** Writes a new question block, and puts it on the page on screen. */
+  async addQuiz() {
+    const quiz = await editQuiz(null);
+    if (!quiz || this.readOnly) return;
+    const index = this.currentPageIndex;
+    const page = this.note.pages[index];
+    quiz.w = Math.min(page.width * 0.6, 560);
+    quiz.h = quizHeight(quiz);
+    // in the middle of what's on screen
+    const [, cy] = this.toWorld(this.width / 2, this.height / 2);
+    quiz.x = (page.width - quiz.w) / 2;
+    quiz.y = Math.max(20, Math.min(page.height - quiz.h - 20, cy - this.pageOffset(page) - quiz.h / 2));
+    page.quizzes.push(quiz);
+    page.changed();
+    this.note.ensureBlankLastPage();
+    this.commit([Ops.addQuiz(page, quiz)], [Ops.removeQuizzes([quiz])]);
+    this.select(page, [], [quiz]);
+    this.renderHeaderActions();
+    this.requestFrame();
+    toast('Question ajoutée · touchez-la pour y répondre');
+  }
+
+  async editQuizBlock(page, quiz) {
+    const changed = await editQuiz(quiz);
+    if (!changed || this.readOnly || !page.quizzes.includes(quiz)) return;
+    const before = Ops.updateQuiz(quiz);
+    const width = quiz.w;
+    Object.assign(quiz, changed, { study: quiz.study, x: quiz.x, y: quiz.y, w: width });
+    quiz.h = quizHeight(quiz);
+    page.changed();
+    this.commit([Ops.updateQuiz(quiz)], [before]);
+    if (this.selection) this.select(page, [], [quiz]);
+    this.requestFrame();
+  }
+
+  /** Lets the user answer the question block `quiz`, after a tap on it. */
+  openQuiz(page, quiz) {
+    this.clearSelection();
+    answerQuiz(quiz, {
+      readOnly: this.readOnly,
+      onGraded: (graded) => this.saveQuizStudy(graded),
+      onEdit: () => this.editQuizBlock(page, quiz),
+    });
+  }
+
+  saveQuizStudy(quiz) {
+    if (this.readOnly) return;
+    // how well it's known isn't undone
+    this.session.submit([Ops.quizStudy(quiz)]);
+    this.savePending();
+    this.renderHeaderActions();
+  }
+
+  /** The quiz of the whole note: every question block, to review them. */
+  showQuiz() {
+    noteQuiz(this.note, {
+      name: this.options.name,
+      readOnly: this.readOnly,
+      onGraded: (quiz) => this.saveQuizStudy(quiz),
+      onGoTo: (page, quiz) => this.goToQuiz(page, quiz),
+      onAdd: () => this.addQuiz(),
+      onFlashcards: this.note.flashcards ? () => this.study() : null,
+    });
+  }
+
+  goToQuiz(page, quiz) {
+    const index = this.note.pages.indexOf(page);
+    if (index < 0) return;
+    this.scrollToPage(index);
+    if (!this.paged) {
+      // the question in the middle of the screen
+      this.camera.y = this.pageTops[index] + quiz.y + quiz.h / 2 - this.height / 2 / this.camera.z;
+      this.clampCamera();
+    }
+    if (!this.readOnly) this.select(page, [], [quiz]);
+  }
+
   /** The button that puts the selected photos in front of the writing, or behind it. */
   layerButton() {
-    const above = this.selection.images.every((image) => image.above);
+    const above = this.selection.images.filter((image) => !image.isQuiz).every((image) => image.above);
     const label = above ? "Derrière l'écriture" : "Devant l'écriture";
     return h(
       'button',
@@ -2129,7 +2303,8 @@ export class Editor {
 
   setImagesAbove(above) {
     if (!this.selection) return;
-    const { page, images } = this.selection;
+    const { page } = this.selection;
+    const images = this.selection.images.filter((image) => !image.isQuiz);
     const before = images.map((image) => Ops.updateImage(page, image));
     for (const image of images) image.above = above;
     page.changed();
@@ -2211,7 +2386,10 @@ export class Editor {
     if (choice === 'flashcards') this.toggleFlashcards();
     if (choice === 'study') this.study();
     if (choice === 'share') copyShareLink(this.options.path);
-    if (choice === 'fit') this.fitWidth();
+    if (choice === 'fit') this.resetZoom();
+    if (choice === 'quiz') this.addQuiz();
+    if (choice === 'noteQuiz') this.showQuiz();
+    if (choice === 'help') this.showHelp();
     // e.g. a bookmark was added
     this.renderRibbon();
   }
@@ -2438,7 +2616,11 @@ export class Editor {
 
   /** The study button is shown while the note is in flashcards mode. */
   renderHeaderActions() {
-    this.studyButton.hidden = !this.note.flashcards;
+    const quizzes = this.note.quizzes;
+    this.studyButton.hidden = !this.note.flashcards && !quizzes.length;
+    const due = quizzes.filter(({ quiz }) => isDue(quiz.study)).length;
+    this.dueBadge.hidden = !due;
+    this.dueBadge.textContent = due > 99 ? '99+' : String(due);
     this.renderRibbon();
   }
 
@@ -2614,6 +2796,7 @@ export class Editor {
       Ops.insertPage(page, after),
       ...page.strokes.map((stroke) => Ops.addStroke(page, stroke)),
       ...page.images.flatMap((image) => Ops.addImage(page, image, { sendAsset: false })),
+      ...page.quizzes.flatMap((quiz) => [Ops.addQuiz(page, quiz), Ops.quizStudy(quiz)]),
       ...(page.bookmark !== null && page.bookmark !== undefined ? [Ops.bookmark(page)] : []),
     ];
     const op = Ops.deletePage(page);

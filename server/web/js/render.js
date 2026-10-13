@@ -328,6 +328,9 @@ export function drawPage(ctx, note, page, { onImageLoad, selected, hidden } = {}
     if (!image.above && !hidden?.has(image)) drawImage(ctx, note, page, image, onImageLoad, false);
   }
   drawText(ctx, page);
+  for (const quiz of page.quizzes) {
+    if (!hidden?.has(quiz)) drawQuiz(ctx, quiz);
+  }
 
   // Highlighters are drawn in a layer that darkens what's below it,
   // so overlaps don't get darker, like in the app.
@@ -386,4 +389,217 @@ function highlighterLayer(ctx) {
     layerCanvas.height = height;
   }
   return layerCanvas;
+}
+
+// Question blocks are laid out QUIZ_WIDTH wide, and drawn at their size.
+export const QUIZ_WIDTH = 520;
+// Handwriting in a block is written on a pad this wide.
+export const INK_WIDTH = 476;
+const QUIZ_PADDING = 22;
+const QUIZ_FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+export const QUIZ_LABELS = { qa: 'Question', tf: 'Vrai ou faux', mcq: 'QCM', cloze: 'Texte à trous' };
+
+let measureContext;
+
+/** `text` cut into lines no wider than `width` in `font`. */
+function wrap(text, font, width) {
+  measureContext ??= document.createElement('canvas').getContext('2d');
+  measureContext.font = font;
+  const result = [];
+  for (const paragraph of text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(/(\s+)/)) {
+      const next = line + word;
+      if (line.trim() && measureContext.measureText(next).width > width) {
+        result.push(line.trimEnd());
+        line = word.trimStart();
+      } else {
+        line = next;
+      }
+    }
+    result.push(line);
+  }
+  return result;
+}
+
+/** The box around some handwriting, or null if there's none. */
+export function inkBounds(ink) {
+  if (!ink?.length) return null;
+  const all = ink.map((stroke) => boundsOf(stroke));
+  return {
+    left: Math.min(...all.map((b) => b.left)),
+    top: Math.min(...all.map((b) => b.top)),
+    right: Math.max(...all.map((b) => b.right)),
+    bottom: Math.max(...all.map((b) => b.bottom)),
+  };
+}
+
+/** The sentence of a cloze block, with its [hidden words] as blanks. */
+export function clozeBlanks(cloze) {
+  return cloze.replace(/\[([^\]]*)\]/g, (_, word) => '_'.repeat(Math.max(4, Math.min(12, word.length + 2))));
+}
+
+/**
+ * How a question block looks, QUIZ_WIDTH wide: its height, and what draws
+ * it at that size. The answer isn't shown, only the question.
+ */
+export function layoutQuiz(quiz) {
+  const inner = QUIZ_WIDTH - QUIZ_PADDING * 2;
+  const steps = [];
+  let y = QUIZ_PADDING;
+
+  // the kind of question, as a small label
+  const label = QUIZ_LABELS[quiz.type] ?? 'Question';
+  steps.push((ctx) => {
+    ctx.font = `700 15px ${QUIZ_FONT}`;
+    const width = ctx.measureText(label).width + 44;
+    ctx.fillStyle = 'rgba(79, 70, 229, 0.12)';
+    roundRect(ctx, QUIZ_PADDING, QUIZ_PADDING, width, 28, 14);
+    ctx.fill();
+    ctx.fillStyle = '#4f46e5';
+    ctx.beginPath();
+    ctx.arc(QUIZ_PADDING + 16, QUIZ_PADDING + 14, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 13px ${QUIZ_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('?', QUIZ_PADDING + 16, QUIZ_PADDING + 19);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#4f46e5';
+    ctx.font = `700 15px ${QUIZ_FONT}`;
+    ctx.fillText(label, QUIZ_PADDING + 32, QUIZ_PADDING + 19);
+  });
+  y += 28 + 14;
+
+  const text = quiz.type === 'cloze' ? clozeBlanks(quiz.cloze) : quiz.question.text;
+  const font = `600 23px ${QUIZ_FONT}`;
+  if (text.trim()) {
+    const lines = wrap(text.trim(), font, inner);
+    const top = y;
+    steps.push((ctx) => {
+      ctx.font = font;
+      ctx.fillStyle = '#17171f';
+      lines.forEach((line, i) => ctx.fillText(line, QUIZ_PADDING, top + 23 + i * 31));
+    });
+    y += lines.length * 31 + 8;
+  }
+
+  const ink = quiz.type === 'cloze' ? null : inkBounds(quiz.question.ink);
+  if (ink) {
+    const top = y;
+    const scale = inner / INK_WIDTH;
+    steps.push((ctx) => {
+      ctx.save();
+      ctx.translate(QUIZ_PADDING, top - ink.top * scale + 4);
+      ctx.scale(scale, scale);
+      for (const stroke of quiz.question.ink) drawStroke(ctx, stroke);
+      ctx.restore();
+    });
+    y += (ink.bottom - ink.top) * scale + 16;
+  }
+
+  if (!text.trim() && !ink) {
+    const top = y;
+    steps.push((ctx) => {
+      ctx.font = `italic 20px ${QUIZ_FONT}`;
+      ctx.fillStyle = '#9a9aa8';
+      ctx.fillText('Question vide', QUIZ_PADDING, top + 20);
+    });
+    y += 34;
+  }
+
+  if (quiz.type === 'mcq') {
+    for (const choice of quiz.choices) {
+      const lines = wrap(choice.text || '…', `19px ${QUIZ_FONT}`, inner - 34);
+      const top = y + 4;
+      steps.push((ctx) => {
+        ctx.strokeStyle = '#a5a5b5';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(QUIZ_PADDING + 10, top + 12, 9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = `19px ${QUIZ_FONT}`;
+        ctx.fillStyle = '#33333d';
+        lines.forEach((line, i) => ctx.fillText(line, QUIZ_PADDING + 30, top + 19 + i * 26));
+      });
+      y += lines.length * 26 + 12;
+    }
+  } else if (quiz.type === 'tf') {
+    const top = y + 4;
+    steps.push((ctx) => {
+      ctx.font = `600 18px ${QUIZ_FONT}`;
+      ['Vrai', 'Faux'].forEach((word, i) => {
+        const x = QUIZ_PADDING + i * 116;
+        ctx.strokeStyle = '#c7c7d4';
+        ctx.lineWidth = 2;
+        roundRect(ctx, x, top, 104, 38, 19);
+        ctx.stroke();
+        ctx.fillStyle = '#33333d';
+        ctx.textAlign = 'center';
+        ctx.fillText(word, x + 52, top + 25);
+        ctx.textAlign = 'left';
+      });
+    });
+    y += 50;
+  }
+
+  // what to do with it
+  const top = y + 6;
+  steps.push((ctx) => {
+    ctx.strokeStyle = 'rgba(79, 70, 229, 0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(QUIZ_PADDING, top);
+    ctx.lineTo(QUIZ_WIDTH - QUIZ_PADDING, top);
+    ctx.stroke();
+    ctx.font = `600 17px ${QUIZ_FONT}`;
+    ctx.fillStyle = '#4f46e5';
+    ctx.fillText('Toucher pour répondre', QUIZ_PADDING, top + 30);
+  });
+  y += 6 + 44;
+
+  const height = y + QUIZ_PADDING - 8;
+  return {
+    height,
+    draw(ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(30, 30, 60, 0.12)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 4;
+      roundRect(ctx, 0, 0, QUIZ_WIDTH, height, 22);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = 'rgba(79, 70, 229, 0.55)';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      for (const step of steps) step(ctx);
+    },
+  };
+}
+
+/** The height of a question block `width` wide. */
+export function quizHeight(quiz, width = quiz.w) {
+  return layoutQuiz(quiz).height * (width / QUIZ_WIDTH);
+}
+
+/** Draws a question block at its place on the page. */
+export function drawQuiz(ctx, quiz) {
+  const layout = layoutQuiz(quiz);
+  const scale = quiz.w / QUIZ_WIDTH;
+  ctx.save();
+  ctx.translate(quiz.x, quiz.y);
+  // it may have been laid out differently on another device
+  ctx.scale(scale, quiz.h / layout.height);
+  layout.draw(ctx);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }

@@ -216,6 +216,7 @@ export class Page {
     this.text = [{ insert: '\n' }];
     this.bookmark = null;
     this.study = null;
+    this.quizzes = [];
     this.version = 0; // changes whenever the page needs drawing again
   }
 
@@ -223,6 +224,7 @@ export class Page {
     return (
       this.strokes.length === 0 &&
       this.images.length === 0 &&
+      this.quizzes.length === 0 &&
       !this.backgroundImage &&
       !this.text.some(
         (op) => typeof op.insert !== 'string' || op.insert.trim().length,
@@ -303,6 +305,20 @@ export class Note {
       if (stroke) return [page, stroke];
     }
     return [null, null];
+  }
+
+  /** The page and the question block whose uid is `uid`. */
+  findQuiz(uid) {
+    for (const page of this.pages) {
+      const quiz = page.quizzes.find((q) => q.uid === uid);
+      if (quiz) return [page, quiz];
+    }
+    return [null, null];
+  }
+
+  /** Every question block of the note, page after page. */
+  get quizzes() {
+    return this.pages.flatMap((page) => page.quizzes.map((quiz) => ({ page, quiz })));
   }
 
   findImage(uid) {
@@ -524,6 +540,36 @@ export class Note {
         if (index >= 0) this.pages[index].study = op.c ?? null;
         break;
       }
+      case 'za': {
+        const quiz = quizFromJson(op.q);
+        if (!quiz.uid || this.findQuiz(quiz.uid)[1]) return;
+        const page = this.materializePage(op.pg);
+        page.quizzes.push(quiz);
+        page.changed();
+        break;
+      }
+      case 'zu': {
+        const [page, quiz] = this.findQuiz(op.q?.u);
+        if (!quiz) return;
+        // what it's about and where it is; how well it's known is apart
+        const { study } = quiz;
+        Object.assign(quiz, quizFromJson(op.q), { study });
+        page.changed();
+        break;
+      }
+      case 'zr':
+        for (const uid of op.ids) {
+          const [page, quiz] = this.findQuiz(uid);
+          if (!page) continue;
+          page.quizzes.splice(page.quizzes.indexOf(quiz), 1);
+          page.changed();
+        }
+        break;
+      case 'zs': {
+        const [, quiz] = this.findQuiz(op.id);
+        if (quiz) quiz.study = op.c ?? null;
+        break;
+      }
       case 'bm': {
         const index = this.pageIndex(op.pg);
         if (index >= 0) {
@@ -574,6 +620,11 @@ export const Ops = {
   bookmark: (page) => ({ t: 'bm', pg: page.id, b: page.bookmark }),
   flashcards: (on) => ({ t: 'fl', on }),
   study: (page) => ({ t: 'fc', pg: page.id, c: page.study }),
+  addQuiz: (page, quiz) => ({ t: 'za', pg: page.id, q: quizToJson(quiz) }),
+  /** What `quiz` asks and where it is, `rect` being its position then. */
+  updateQuiz: (quiz, rect = quiz) => ({ t: 'zu', q: quizToJson({ ...quiz, x: rect.x, y: rect.y, w: rect.w, h: rect.h }) }),
+  removeQuizzes: (quizzes) => ({ t: 'zr', ids: quizzes.map((quiz) => quiz.uid) }),
+  quizStudy: (quiz) => ({ t: 'zs', id: quiz.uid, c: quiz.study ?? null }),
 
   /** The operations that add `image` to `page`, with its picture. */
   addImage(page, image, { sendAsset = true } = {}) {
@@ -633,3 +684,70 @@ export const Ops = {
     ab: above,
   }),
 };
+
+/**
+ * The kinds of question blocks: a question and its answer, true or false,
+ * multiple choice, and a sentence with words to find.
+ */
+export const QUIZ_TYPES = ['qa', 'tf', 'mcq', 'cloze'];
+
+/** A question block, which sits on a page like a photo. */
+export function newQuiz(fields = {}) {
+  return {
+    isQuiz: true,
+    uid: newId(),
+    type: 'qa',
+    x: 0,
+    y: 0,
+    w: 520,
+    h: 200,
+    question: { text: '', ink: [] },
+    answer: { text: '', ink: [] },
+    truth: true,
+    choices: [],
+    cloze: '',
+    study: null,
+    ...fields,
+  };
+}
+
+/** Some text and handwriting, as it's sent. */
+function writingToJson(writing) {
+  return { t: writing?.text ?? '', i: (writing?.ink ?? []).map((stroke) => stroke.toJson()) };
+}
+
+function writingFromJson(json) {
+  return { text: json?.t ?? '', ink: (json?.i ?? []).map((stroke) => Stroke.fromJson(stroke)) };
+}
+
+export function quizToJson(quiz) {
+  return {
+    u: quiz.uid,
+    k: quiz.type,
+    x: quiz.x,
+    y: quiz.y,
+    w: quiz.w,
+    h: quiz.h,
+    q: writingToJson(quiz.question),
+    a: writingToJson(quiz.answer),
+    v: quiz.truth,
+    c: quiz.choices.map((choice) => ({ t: choice.text, ok: choice.correct })),
+    z: quiz.cloze,
+  };
+}
+
+export function quizFromJson(json) {
+  return newQuiz({
+    uid: json.u,
+    type: QUIZ_TYPES.includes(json.k) ? json.k : 'qa',
+    x: json.x ?? 0,
+    y: json.y ?? 0,
+    w: json.w ?? 520,
+    h: json.h ?? 200,
+    question: writingFromJson(json.q),
+    answer: writingFromJson(json.a),
+    truth: json.v !== false,
+    choices: (json.c ?? []).map((choice) => ({ text: choice.t ?? '', correct: choice.ok === true })),
+    cloze: json.z ?? '',
+  });
+}
