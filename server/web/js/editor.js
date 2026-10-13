@@ -33,9 +33,12 @@ const TOUCH_HANDLE_RADIUS = 34; // a fingertip covers more than a pen
 // as long as it stays within HOLD_SLOP screen pixels.
 const HOLD_DELAY = 450;
 const HOLD_SLOP = 6;
-// A touch wider than this, in screen pixels, is the side of the hand
-// rather than a fingertip.
-const PALM_SIZE = 44;
+// A touch wider than this, in screen pixels, is likely the side of the hand
+// rather than a fingertip. Browsers report sizes loosely (a fingertip can be
+// 50 px on an iPad or a Samsung tablet), so such a touch that then slides
+// more than PALM_SLIP screen pixels is a finger after all.
+const PALM_SIZE = 70;
+const PALM_SLIP = 24;
 // After the pen lifts, the hand is often still moving on the screen, so
 // for this long a new touch is taken to be the hand too, in milliseconds.
 const PEN_GRACE = 500;
@@ -1328,8 +1331,8 @@ export class Editor {
       }
       this.penDown();
     } else if (e.pointerType === 'touch' && this.isPalm(e)) {
-      // ignored until it lifts, however it moves
-      point.palm = true;
+      // ignored until it lifts, unless it turns out to be a finger
+      point.palm = this.nearPen() ? 'pen' : 'size';
       return;
     }
 
@@ -1357,10 +1360,30 @@ export class Editor {
 
   /** Whether the touch `e` is the hand resting on the screen. */
   isPalm(e) {
-    // while writing, or just after, only the pen counts
-    if ([...this.pointers.values()].some((p) => p.type === 'pen')) return true;
-    if (performance.now() - (this.penUpAt ?? -Infinity) < PEN_GRACE) return true;
+    if (this.nearPen()) return true;
+    // without a pen, the hand doesn't rest on the screen
+    if (!this.penSeen) return false;
     return (e.width ?? 0) > PALM_SIZE || (e.height ?? 0) > PALM_SIZE;
+  }
+
+  /** Whether the pen is writing, or just lifted: then only the pen counts. */
+  nearPen() {
+    if ([...this.pointers.values()].some((p) => p.type === 'pen')) return true;
+    return performance.now() - (this.penUpAt ?? -Infinity) < PEN_GRACE;
+  }
+
+  /**
+   * A touch taken for the hand by its size alone slid on its own: it's a
+   * finger moving the page.
+   */
+  palmSlid(e, point) {
+    if (point.palm !== 'size' || this.gesture || this.nearPen() || this.fingers().length) return false;
+    if (Math.hypot(e.offsetX - point.sx, e.offsetY - point.sy) <= PALM_SLIP) return false;
+    point.palm = false;
+    point.x = e.offsetX;
+    point.y = e.offsetY;
+    this.startPan(e.pointerId);
+    return true;
   }
 
   /** The fingers on the screen, without the hand. */
@@ -1391,7 +1414,7 @@ export class Editor {
 
   onPointerMove(e) {
     const point = this.pointers.get(e.pointerId);
-    if (point?.palm) return;
+    if (point?.palm && !this.palmSlid(e, point)) return;
     const erasing = this.tool === 'eraser' || this.gesture?.kind === 'erase';
     if (erasing && !this.readOnly && (e.pointerType !== 'touch' || this.gesture?.pointerId === e.pointerId)) {
       this.eraserAt = { sx: e.offsetX, sy: e.offsetY };
