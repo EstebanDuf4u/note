@@ -113,6 +113,14 @@ const PEN_KIND_NAMES = { fountainPen: 'Plume', ballpointPen: 'Bille', pencil: 'C
 
 const ERASER_SIZES = [6, 12, 24];
 
+/**
+ * Whether the pen `e` erases rather than writes: its side button is held,
+ * like the S Pen's in Samsung Notes, or it's the eraser end of a pen.
+ */
+function penErases(e) {
+  return e.pointerType === 'pen' && ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || e.button === 5);
+}
+
 function load(key, fallback) {
   try {
     const value = localStorage.getItem('noteplus.' + key);
@@ -259,6 +267,9 @@ export class Editor {
     for (const type of ['touchstart', 'touchmove', 'touchend']) {
       this.canvas.addEventListener(type, (e) => e.preventDefault(), { passive: false });
     }
+    // Android opens a menu on a long press, with a finger or the S Pen,
+    // which interrupts the stroke or the photo being picked up.
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     // Safari's own pinch zoom
     this.onGesture = (e) => e.preventDefault();
     document.addEventListener('gesturestart', this.onGesture);
@@ -1346,7 +1357,8 @@ export class Editor {
   onPointerMove(e) {
     const point = this.pointers.get(e.pointerId);
     if (point?.palm) return;
-    if (this.tool === 'eraser' && !this.readOnly && (e.pointerType !== 'touch' || this.gesture?.pointerId === e.pointerId)) {
+    const erasing = this.tool === 'eraser' || this.gesture?.kind === 'erase';
+    if (erasing && !this.readOnly && (e.pointerType !== 'touch' || this.gesture?.pointerId === e.pointerId)) {
       this.eraserAt = { sx: e.offsetX, sy: e.offsetY };
       this.requestFrame();
     }
@@ -1664,8 +1676,9 @@ export class Editor {
   startTool(e, point) {
     const hit = this.pageAt(point.x, point.y);
     const byTouch = e.pointerType === 'touch';
+    const erasing = this.tool === 'eraser' || penErases(e);
 
-    if (this.tool === 'lasso') {
+    if (this.tool === 'lasso' && !erasing) {
       if (this.grabSelection(e, point)) return;
       this.clearSelection();
       if (!hit) return;
@@ -1682,7 +1695,7 @@ export class Editor {
 
     if (!hit) return;
 
-    if (this.tool === 'eraser') {
+    if (erasing) {
       this.gesture = { kind: 'erase', pointerId: e.pointerId, byTouch, page: hit.page, erased: [], pieces: [], last: [hit.x, hit.y] };
       this.eraserAt = { sx: point.x, sy: point.y };
       this.eraseAt(hit.x, hit.y);
